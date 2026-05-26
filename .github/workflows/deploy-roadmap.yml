@@ -12,7 +12,7 @@ jobs:
   infra:
     uses: gmautner/locaweb-cloud-provision/.github/workflows/provision.yml@v1
     with:
-      env_name: "preview"
+      env_name: "roadmap"
       zone: "ZP02"
       accessories: '[{"name":"db","plan":"medium","disk_size_gb":20}]'
     secrets:
@@ -55,9 +55,9 @@ jobs:
         env:
           KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          kamal proxy boot -d preview || kamal proxy reboot -y -d preview || true
-          kamal setup -d preview
-          kamal accessory reboot all -d preview
+          kamal proxy boot -d roadmap || kamal proxy reboot -y -d roadmap || true
+          kamal setup -d roadmap
+          kamal accessory reboot all -d roadmap
 
       - uses: actions/delete-package-versions@v5
         with:

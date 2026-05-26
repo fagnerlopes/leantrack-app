@@ -5,7 +5,7 @@ servers:
 
 env:
   clear:
-    APP_ENV: preview
+    APP_ENV: roadmap
     BASE_URL: https://<%= ENV['INFRA_WEB_IP'] %>.nip.io
     SEED_ADMIN_EMAIL: admin@kinghost.com.br
   secret:

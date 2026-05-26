@@ -1,4 +1,4 @@
-name: Teardown Preview
+name: Teardown Roadmap
 on:
   workflow_dispatch:
 
@@ -6,7 +6,7 @@ jobs:
   teardown:
     uses: gmautner/locaweb-cloud-provision/.github/workflows/teardown.yml@v1
     with:
-      env_name: "preview"
+      env_name: "roadmap"
       zone: "ZP02"
     secrets:
       CLOUDSTACK_API_KEY: ${{ secrets.CLOUDSTACK_API_KEY }}
