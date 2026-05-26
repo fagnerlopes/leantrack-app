@@ -74,34 +74,37 @@ func main() {
 	slog.Info("admin seeded", "email", cfg.SeedAdminEmail)
 
 	h := handler.New(q, cfg)
+	apiMux := h.Routes() // *http.ServeMux with /up, /api/*, /auth/*
 
-	mux := http.NewServeMux()
-	mux.Handle("/", h.Routes())
-
-	// Static frontend
+	// Build the top-level handler: in dev mode we just use the API mux
+	// (Vite serves the SPA). In prod we add a SPA static-file fallback that
+	// delegates API/health paths to apiMux and serves index.html for SPA routes.
+	var topHandler http.Handler = apiMux
 	frontendDist := "frontend/dist"
-	if _, err := os.Stat(frontendDist); err == nil && !cfg.DevMode {
-		fs := http.FileServer(http.Dir(frontendDist))
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/up" {
-				h.Routes().ServeHTTP(w, r)
-				return
-			}
-			if r.URL.Path != "/" {
-				if _, err := os.Stat(filepath.Join(frontendDist, filepath.Clean(r.URL.Path))); err == nil {
-					fs.ServeHTTP(w, r)
+	if !cfg.DevMode {
+		if _, err := os.Stat(frontendDist); err == nil {
+			fs := http.FileServer(http.Dir(frontendDist))
+			topHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/auth/") || r.URL.Path == "/up" {
+					apiMux.ServeHTTP(w, r)
 					return
 				}
-			}
-			http.ServeFile(w, r, filepath.Join(frontendDist, "index.html"))
-		})
-	} else if !cfg.DevMode {
-		slog.Warn("frontend dist not found — SPA routes will return 404", "path", frontendDist)
+				if r.URL.Path != "/" {
+					if _, err := os.Stat(filepath.Join(frontendDist, filepath.Clean(r.URL.Path))); err == nil {
+						fs.ServeHTTP(w, r)
+						return
+					}
+				}
+				http.ServeFile(w, r, filepath.Join(frontendDist, "index.html"))
+			})
+		} else {
+			slog.Warn("frontend dist not found — SPA routes will return 404", "path", frontendDist)
+		}
 	}
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           mux,
+		Handler:           topHandler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
