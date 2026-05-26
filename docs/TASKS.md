@@ -21,4 +21,4 @@
 | Dockerfile multi-stage | Done | Pronto para Locaweb Cloud |
 | Documentação (PRD, TASKS, ADRs, INFRASTRUCTURE) | Done | — |
 | Commit + push | Done | — |
-| Deploy preview Locaweb Cloud | Pending | Próximo passo |
+| Deploy preview Locaweb Cloud | In Progress | Primeira tentativa falhou (orquestrador Locaweb retornou erro 530 ao criar VM web — estado parcial). Teardown executado, redisparando deploy. |
