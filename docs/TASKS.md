@@ -22,3 +22,4 @@
 | Documentação (PRD, TASKS, ADRs, INFRASTRUCTURE) | Done | — |
 | Commit + push | Done | — |
 | Deploy preview Locaweb Cloud | In Progress | Primeira tentativa falhou (orquestrador Locaweb retornou erro 530 ao criar VM web — estado parcial). Teardown executado, redisparando deploy. |
+# Retry deploy attempt 19:31:45
