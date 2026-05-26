@@ -1,0 +1,8 @@
+{
+  "model": "opus[1m]",
+  "agent": "cofounder:cofounder",
+  "defaultMode": "acceptEdits",
+  "permissions": {
+    "allow": ["Bash", "Read", "WebFetch"]
+  }
+}

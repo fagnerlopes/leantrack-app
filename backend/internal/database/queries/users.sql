@@ -1,0 +1,33 @@
+-- name: GetUserByEmail :one
+SELECT id, email, password_hash, name, role, created_at
+FROM users
+WHERE email = $1;
+
+-- name: GetUserByID :one
+SELECT id, email, password_hash, name, role, created_at
+FROM users
+WHERE id = $1;
+
+-- name: UpsertSeedUser :exec
+INSERT INTO users (email, password_hash, name, role)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (email) DO UPDATE
+SET password_hash = EXCLUDED.password_hash,
+    name = EXCLUDED.name,
+    role = EXCLUDED.role;
+
+-- name: CreateSession :exec
+INSERT INTO sessions (token, user_id, expires_at)
+VALUES ($1, $2, $3);
+
+-- name: GetSession :one
+SELECT s.token, s.user_id, s.expires_at, u.email, u.name, u.role
+FROM sessions s
+JOIN users u ON u.id = s.user_id
+WHERE s.token = $1 AND s.expires_at > now();
+
+-- name: DeleteSession :exec
+DELETE FROM sessions WHERE token = $1;
+
+-- name: DeleteExpiredSessions :exec
+DELETE FROM sessions WHERE expires_at <= now();

@@ -1,0 +1,10 @@
+backend/cmd/server/server
+backend/server
+frontend/dist/
+frontend/node_modules/
+e2e/node_modules/
+e2e/test-results/
+.venv/
+.env
+.DS_Store
+*.log
