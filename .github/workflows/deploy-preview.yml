@@ -13,7 +13,7 @@ jobs:
     uses: gmautner/locaweb-cloud-provision/.github/workflows/provision.yml@v1
     with:
       env_name: "preview"
-      zone: "ZP01"
+      zone: "ZP02"
       accessories: '[{"name":"db","plan":"medium","disk_size_gb":20}]'
     secrets:
       CLOUDSTACK_API_KEY: ${{ secrets.CLOUDSTACK_API_KEY }}
