@@ -1,0 +1,35 @@
+service: <%= ENV['REPO_NAME'] %> # do not change
+image: <%= ENV['REPO_FULL'] %> # do not change
+
+proxy:
+  app_port: 80
+  forward_headers: false # do not change
+  healthcheck:
+    path: /up
+    interval: 3
+    timeout: 5
+
+ssh:
+  user: root # do not change
+
+registry:
+  server: ghcr.io
+  username: <%= ENV['REPO_OWNER'] %> # do not change
+  password:
+    - KAMAL_REGISTRY_PASSWORD # do not change
+
+builder: # do not change
+  arch: amd64
+  cache:
+    type: gha
+    options: mode=max
+
+logging:
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+readiness_delay: 15
+deploy_timeout: 180
+drain_timeout: 30

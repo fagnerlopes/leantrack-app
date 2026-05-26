@@ -1,0 +1,66 @@
+name: Deploy Preview
+on:
+  push:
+    branches: [main]
+    paths-ignore: [".claude/**"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  infra:
+    uses: gmautner/locaweb-cloud-provision/.github/workflows/provision.yml@v1
+    with:
+      env_name: "preview"
+      zone: "ZP01"
+      accessories: '[{"name":"db","plan":"medium","disk_size_gb":20}]'
+    secrets:
+      CLOUDSTACK_API_KEY: ${{ secrets.CLOUDSTACK_API_KEY }}
+      CLOUDSTACK_SECRET_KEY: ${{ secrets.CLOUDSTACK_SECRET_KEY }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+  deploy:
+    needs: infra
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load infrastructure environment
+        run: echo "${{ needs.infra.outputs.infra_env }}" >> "$GITHUB_ENV"
+
+      - name: Set repo identity
+        run: |
+          echo "REPO_NAME=$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "REPO_FULL=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "REPO_OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - uses: crazy-max/ghaction-github-runtime@v3
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - run: gem install kamal --no-document
+
+      - name: Deploy with Kamal
+        env:
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          kamal proxy boot -d preview || kamal proxy reboot -y -d preview || true
+          kamal setup -d preview
+          kamal accessory reboot all -d preview
+
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ env.REPO_NAME }}
+          package-type: container
+          min-versions-to-keep: 1

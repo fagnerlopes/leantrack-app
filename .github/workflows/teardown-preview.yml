@@ -1,0 +1,13 @@
+name: Teardown Preview
+on:
+  workflow_dispatch:
+
+jobs:
+  teardown:
+    uses: gmautner/locaweb-cloud-provision/.github/workflows/teardown.yml@v1
+    with:
+      env_name: "preview"
+      zone: "ZP01"
+    secrets:
+      CLOUDSTACK_API_KEY: ${{ secrets.CLOUDSTACK_API_KEY }}
+      CLOUDSTACK_SECRET_KEY: ${{ secrets.CLOUDSTACK_SECRET_KEY }}
