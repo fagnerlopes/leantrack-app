@@ -13,6 +13,7 @@ const emptyForm: ItemInput = {
   extTeam: null, extDescription: null, extMilestone: null,
   sortOrder: 0,
   color: null,
+  epicUrl: null,
 };
 
 export default function Admin() {
@@ -100,7 +101,17 @@ export default function Admin() {
                   const risk = calcRisk(i);
                   return (
                     <tr key={i.id} style={{ borderTop: "1px solid #f1f5f9" }}>
-                      <Td><strong>{i.title}</strong>{i.notes && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{i.notes.slice(0,60)}</div>}</Td>
+                      <Td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <strong>{i.title}</strong>
+                          {i.epicUrl && (
+                            <a href={i.epicUrl} target="_blank" rel="noopener noreferrer"
+                              title="Abrir épico em nova aba"
+                              style={{ fontSize: 11, padding: "1px 5px", borderRadius: 4, border: "1px solid #cbd5e1", background: "#f8fafc", textDecoration: "none" }}>🔗</a>
+                          )}
+                        </div>
+                        {i.notes && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{i.notes.slice(0,60)}</div>}
+                      </Td>
                       <Td><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: sm.bg, color: sm.text, fontWeight: 600 }}>{sm.label}</span></Td>
                       <Td>{fmtDate(i.startDate)}</Td>
                       <Td>{fmtDate(i.endDate)}</Td>

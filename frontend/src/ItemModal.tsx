@@ -23,6 +23,7 @@ export default function ItemModal({ initial, allItems, isNew, onClose, onSave, o
     extMilestone: initial.extMilestone || null,
     sortOrder: initial.sortOrder || 0,
     color: initial.color || null,
+    epicUrl: initial.epicUrl || null,
     hasExt: !!initial.extTeam,
   });
   const set = (k: string, v: any) => setF(p => ({ ...p, [k]: v }));
@@ -42,6 +43,7 @@ export default function ItemModal({ initial, allItems, isNew, onClose, onSave, o
       extMilestone: f.hasExt ? (f.extMilestone || null) : null,
       sortOrder: f.sortOrder,
       color: f.color || null,
+      epicUrl: f.epicUrl ? f.epicUrl.trim() : null,
     };
     onSave(input);
   };
@@ -111,6 +113,19 @@ export default function ItemModal({ initial, allItems, isNew, onClose, onSave, o
             </select>
           </div>
           <div><label style={lbl}>Ordem</label><input type="number" style={inp} value={f.sortOrder} onChange={e => set("sortOrder", Number(e.target.value))}/></div>
+          <div>
+            <label style={lbl}>Link do épico (Jira / Azure DevOps)</label>
+            <input
+              type="url"
+              placeholder="https://..."
+              style={inp}
+              value={f.epicUrl || ""}
+              onChange={e => set("epicUrl", e.target.value || null)}
+            />
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>
+              Cole a URL do épico (deve começar com http:// ou https://).
+            </div>
+          </div>
           <div><label style={lbl}>Notas</label><textarea style={{ ...inp, height: 60, resize: "vertical" }} value={f.notes} onChange={e => set("notes", e.target.value)}/></div>
 
           <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 10, fontSize: 11, fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>Dependência externa</div>

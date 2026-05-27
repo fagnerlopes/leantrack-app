@@ -204,6 +204,7 @@ type itemDTO struct {
 	ExtMilestone   *string `json:"extMilestone"`
 	SortOrder      int32   `json:"sortOrder"`
 	Color          *string `json:"color"`
+	EpicUrl        *string `json:"epicUrl"`
 }
 
 type rowLike interface {
@@ -213,13 +214,13 @@ type rowLike interface {
 func toDTO[T rowLike](row T) itemDTO {
 	switch it := any(row).(type) {
 	case sqlc.RoadmapItem:
-		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color}
+		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color, EpicUrl: it.EpicUrl}
 	case sqlc.ListItemsRow:
-		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color}
+		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color, EpicUrl: it.EpicUrl}
 	case sqlc.CreateItemRow:
-		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color}
+		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color, EpicUrl: it.EpicUrl}
 	case sqlc.UpdateItemRow:
-		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color}
+		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color, EpicUrl: it.EpicUrl}
 	}
 	return itemDTO{}
 }
@@ -237,6 +238,24 @@ type itemReq struct {
 	ExtMilestone   string  `json:"extMilestone"`
 	SortOrder      int32   `json:"sortOrder"`
 	Color          *string `json:"color"`
+	EpicUrl        *string `json:"epicUrl"`
+}
+
+func sanitizeEpicUrl(u *string) *string {
+	if u == nil {
+		return nil
+	}
+	s := strings.TrimSpace(*u)
+	if s == "" {
+		return nil
+	}
+	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+		return nil
+	}
+	if len(s) > 2000 {
+		return nil
+	}
+	return &s
 }
 
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
@@ -316,7 +335,8 @@ func (h *Handler) createItem(w http.ResponseWriter, r *http.Request) {
 		DependencyID: req.DependencyID, Notes: req.Notes,
 		ExtTeam: req.ExtTeam, ExtDescription: req.ExtDescription,
 		ExtMilestone: em, SortOrder: req.SortOrder,
-		Color: sanitizeColor(req.Color),
+		Color:   sanitizeColor(req.Color),
+		EpicUrl: sanitizeEpicUrl(req.EpicUrl),
 	})
 	if err != nil {
 		slog.Error("create item", "err", err)
@@ -350,7 +370,8 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		DependencyID: req.DependencyID, Notes: req.Notes,
 		ExtTeam: req.ExtTeam, ExtDescription: req.ExtDescription,
 		ExtMilestone: em, SortOrder: req.SortOrder,
-		Color: sanitizeColor(req.Color),
+		Color:   sanitizeColor(req.Color),
+		EpicUrl: sanitizeEpicUrl(req.EpicUrl),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "não encontrado")

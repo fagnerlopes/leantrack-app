@@ -1,0 +1,1 @@
+ALTER TABLE roadmap_items ADD COLUMN IF NOT EXISTS epic_url TEXT;

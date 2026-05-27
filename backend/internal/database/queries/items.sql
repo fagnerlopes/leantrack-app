@@ -1,25 +1,25 @@
 -- name: ListItems :many
 SELECT id, title, status, start_date, end_date, progress, dependency_id,
        notes, ext_team, ext_description, ext_milestone, sort_order, color,
-       created_at, updated_at
+       epic_url, created_at, updated_at
 FROM roadmap_items
 ORDER BY sort_order ASC, id ASC;
 
 -- name: GetItem :one
 SELECT id, title, status, start_date, end_date, progress, dependency_id,
        notes, ext_team, ext_description, ext_milestone, sort_order, color,
-       created_at, updated_at
+       epic_url, created_at, updated_at
 FROM roadmap_items
 WHERE id = $1;
 
 -- name: CreateItem :one
 INSERT INTO roadmap_items (
     title, status, start_date, end_date, progress, dependency_id, notes,
-    ext_team, ext_description, ext_milestone, sort_order, color
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ext_team, ext_description, ext_milestone, sort_order, color, epic_url
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING id, title, status, start_date, end_date, progress, dependency_id,
           notes, ext_team, ext_description, ext_milestone, sort_order, color,
-          created_at, updated_at;
+          epic_url, created_at, updated_at;
 
 -- name: UpdateItem :one
 UPDATE roadmap_items SET
@@ -35,11 +35,12 @@ UPDATE roadmap_items SET
     ext_milestone = $11,
     sort_order = $12,
     color = $13,
+    epic_url = $14,
     updated_at = now()
 WHERE id = $1
 RETURNING id, title, status, start_date, end_date, progress, dependency_id,
           notes, ext_team, ext_description, ext_milestone, sort_order, color,
-          created_at, updated_at;
+          epic_url, created_at, updated_at;
 
 -- name: UpdateSortOrder :exec
 UPDATE roadmap_items SET sort_order = $2, updated_at = now() WHERE id = $1;

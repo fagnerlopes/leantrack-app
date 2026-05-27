@@ -25,11 +25,11 @@ func (q *Queries) CountItems(ctx context.Context) (int64, error) {
 const createItem = `-- name: CreateItem :one
 INSERT INTO roadmap_items (
     title, status, start_date, end_date, progress, dependency_id, notes,
-    ext_team, ext_description, ext_milestone, sort_order, color
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ext_team, ext_description, ext_milestone, sort_order, color, epic_url
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING id, title, status, start_date, end_date, progress, dependency_id,
           notes, ext_team, ext_description, ext_milestone, sort_order, color,
-          created_at, updated_at
+          epic_url, created_at, updated_at
 `
 
 type CreateItemParams struct {
@@ -45,6 +45,7 @@ type CreateItemParams struct {
 	ExtMilestone   pgtype.Date `json:"ext_milestone"`
 	SortOrder      int32       `json:"sort_order"`
 	Color          *string     `json:"color"`
+	EpicUrl        *string     `json:"epic_url"`
 }
 
 type CreateItemRow struct {
@@ -61,6 +62,7 @@ type CreateItemRow struct {
 	ExtMilestone   pgtype.Date        `json:"ext_milestone"`
 	SortOrder      int32              `json:"sort_order"`
 	Color          *string            `json:"color"`
+	EpicUrl        *string            `json:"epic_url"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
@@ -79,6 +81,7 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (CreateI
 		arg.ExtMilestone,
 		arg.SortOrder,
 		arg.Color,
+		arg.EpicUrl,
 	)
 	var i CreateItemRow
 	err := row.Scan(
@@ -95,6 +98,7 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (CreateI
 		&i.ExtMilestone,
 		&i.SortOrder,
 		&i.Color,
+		&i.EpicUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -113,7 +117,7 @@ func (q *Queries) DeleteItem(ctx context.Context, id int64) error {
 const getItem = `-- name: GetItem :one
 SELECT id, title, status, start_date, end_date, progress, dependency_id,
        notes, ext_team, ext_description, ext_milestone, sort_order, color,
-       created_at, updated_at
+       epic_url, created_at, updated_at
 FROM roadmap_items
 WHERE id = $1
 `
@@ -132,6 +136,7 @@ type GetItemRow struct {
 	ExtMilestone   pgtype.Date        `json:"ext_milestone"`
 	SortOrder      int32              `json:"sort_order"`
 	Color          *string            `json:"color"`
+	EpicUrl        *string            `json:"epic_url"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
@@ -153,6 +158,7 @@ func (q *Queries) GetItem(ctx context.Context, id int64) (GetItemRow, error) {
 		&i.ExtMilestone,
 		&i.SortOrder,
 		&i.Color,
+		&i.EpicUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -162,7 +168,7 @@ func (q *Queries) GetItem(ctx context.Context, id int64) (GetItemRow, error) {
 const listItems = `-- name: ListItems :many
 SELECT id, title, status, start_date, end_date, progress, dependency_id,
        notes, ext_team, ext_description, ext_milestone, sort_order, color,
-       created_at, updated_at
+       epic_url, created_at, updated_at
 FROM roadmap_items
 ORDER BY sort_order ASC, id ASC
 `
@@ -181,6 +187,7 @@ type ListItemsRow struct {
 	ExtMilestone   pgtype.Date        `json:"ext_milestone"`
 	SortOrder      int32              `json:"sort_order"`
 	Color          *string            `json:"color"`
+	EpicUrl        *string            `json:"epic_url"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
@@ -208,6 +215,7 @@ func (q *Queries) ListItems(ctx context.Context) ([]ListItemsRow, error) {
 			&i.ExtMilestone,
 			&i.SortOrder,
 			&i.Color,
+			&i.EpicUrl,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -235,11 +243,12 @@ UPDATE roadmap_items SET
     ext_milestone = $11,
     sort_order = $12,
     color = $13,
+    epic_url = $14,
     updated_at = now()
 WHERE id = $1
 RETURNING id, title, status, start_date, end_date, progress, dependency_id,
           notes, ext_team, ext_description, ext_milestone, sort_order, color,
-          created_at, updated_at
+          epic_url, created_at, updated_at
 `
 
 type UpdateItemParams struct {
@@ -256,6 +265,7 @@ type UpdateItemParams struct {
 	ExtMilestone   pgtype.Date `json:"ext_milestone"`
 	SortOrder      int32       `json:"sort_order"`
 	Color          *string     `json:"color"`
+	EpicUrl        *string     `json:"epic_url"`
 }
 
 type UpdateItemRow struct {
@@ -272,6 +282,7 @@ type UpdateItemRow struct {
 	ExtMilestone   pgtype.Date        `json:"ext_milestone"`
 	SortOrder      int32              `json:"sort_order"`
 	Color          *string            `json:"color"`
+	EpicUrl        *string            `json:"epic_url"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
@@ -291,6 +302,7 @@ func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (UpdateI
 		arg.ExtMilestone,
 		arg.SortOrder,
 		arg.Color,
+		arg.EpicUrl,
 	)
 	var i UpdateItemRow
 	err := row.Scan(
@@ -307,6 +319,7 @@ func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (UpdateI
 		&i.ExtMilestone,
 		&i.SortOrder,
 		&i.Color,
+		&i.EpicUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

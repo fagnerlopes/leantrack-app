@@ -24,6 +24,7 @@ type RoadmapItem struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	Color          *string            `json:"color"`
+	EpicUrl        *string            `json:"epic_url"`
 }
 
 type Session struct {

@@ -246,6 +246,24 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                       }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 4 }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a", lineHeight: 1.3, flex: 1 }}>{item.title}</div>
+                          {item.epicUrl && (
+                            <a
+                              href={item.epicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              draggable={false}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              title="Abrir épico em nova aba"
+                              style={{
+                                fontSize: 11, lineHeight: 1, padding: "2px 5px",
+                                borderRadius: 4, border: "1px solid #cbd5e1",
+                                background: "#f8fafc", color: "#0f172a",
+                                textDecoration: "none", cursor: "pointer",
+                                display: "inline-flex", alignItems: "center", gap: 2,
+                              }}
+                            >🔗</a>
+                          )}
                           {risk && <RiskBadge level={risk}/>}
                         </div>
                         {dep && (

@@ -14,6 +14,7 @@ export type Item = {
   extMilestone: string | null;
   sortOrder: number;
   color: string | null;
+  epicUrl: string | null;
 };
 
 export type ItemInput = Omit<Item, "id">;
