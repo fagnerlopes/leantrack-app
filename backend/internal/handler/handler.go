@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +86,7 @@ func (h *Handler) Routes() http.Handler {
 
 	mux.Handle("GET /api/items", authM(http.HandlerFunc(h.listItems)))
 	mux.Handle("POST /api/items", authM(auth.RequireAdmin(http.HandlerFunc(h.createItem))))
+	mux.Handle("PUT /api/items/reorder", authM(auth.RequireAdmin(http.HandlerFunc(h.reorderItems))))
 	mux.Handle("PUT /api/items/{id}", authM(auth.RequireAdmin(http.HandlerFunc(h.updateItem))))
 	mux.Handle("DELETE /api/items/{id}", authM(auth.RequireAdmin(http.HandlerFunc(h.deleteItem))))
 
@@ -201,16 +203,25 @@ type itemDTO struct {
 	ExtDescription *string `json:"extDescription"`
 	ExtMilestone   *string `json:"extMilestone"`
 	SortOrder      int32   `json:"sortOrder"`
+	Color          *string `json:"color"`
 }
 
-func toDTO(it sqlc.RoadmapItem) itemDTO {
-	return itemDTO{
-		ID: it.ID, Title: it.Title, Status: it.Status,
-		StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate),
-		Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes,
-		ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription,
-		ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder,
+type rowLike interface {
+	sqlc.RoadmapItem | sqlc.ListItemsRow | sqlc.CreateItemRow | sqlc.UpdateItemRow
+}
+
+func toDTO[T rowLike](row T) itemDTO {
+	switch it := any(row).(type) {
+	case sqlc.RoadmapItem:
+		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color}
+	case sqlc.ListItemsRow:
+		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color}
+	case sqlc.CreateItemRow:
+		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color}
+	case sqlc.UpdateItemRow:
+		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color}
 	}
+	return itemDTO{}
 }
 
 type itemReq struct {
@@ -225,6 +236,23 @@ type itemReq struct {
 	ExtDescription *string `json:"extDescription"`
 	ExtMilestone   string  `json:"extMilestone"`
 	SortOrder      int32   `json:"sortOrder"`
+	Color          *string `json:"color"`
+}
+
+var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+func sanitizeColor(c *string) *string {
+	if c == nil {
+		return nil
+	}
+	s := strings.TrimSpace(*c)
+	if s == "" {
+		return nil
+	}
+	if !colorPattern.MatchString(s) {
+		return nil
+	}
+	return &s
 }
 
 var validStatuses = map[string]bool{
@@ -288,6 +316,7 @@ func (h *Handler) createItem(w http.ResponseWriter, r *http.Request) {
 		DependencyID: req.DependencyID, Notes: req.Notes,
 		ExtTeam: req.ExtTeam, ExtDescription: req.ExtDescription,
 		ExtMilestone: em, SortOrder: req.SortOrder,
+		Color: sanitizeColor(req.Color),
 	})
 	if err != nil {
 		slog.Error("create item", "err", err)
@@ -321,6 +350,7 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		DependencyID: req.DependencyID, Notes: req.Notes,
 		ExtTeam: req.ExtTeam, ExtDescription: req.ExtDescription,
 		ExtMilestone: em, SortOrder: req.SortOrder,
+		Color: sanitizeColor(req.Color),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "não encontrado")
@@ -332,6 +362,37 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toDTO(it))
+}
+
+type reorderEntry struct {
+	ID        int64 `json:"id"`
+	SortOrder int32 `json:"sortOrder"`
+}
+
+func (h *Handler) reorderItems(w http.ResponseWriter, r *http.Request) {
+	var req []reorderEntry
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if len(req) == 0 {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+	if len(req) > 1000 {
+		writeErr(w, http.StatusBadRequest, "lote muito grande")
+		return
+	}
+	for _, e := range req {
+		if err := h.Q.UpdateSortOrder(r.Context(), sqlc.UpdateSortOrderParams{
+			ID: e.ID, SortOrder: e.SortOrder,
+		}); err != nil {
+			slog.Error("reorder", "id", e.ID, "err", err)
+			writeErr(w, http.StatusInternalServerError, "erro ao reordenar")
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *Handler) deleteItem(w http.ResponseWriter, r *http.Request) {

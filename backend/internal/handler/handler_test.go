@@ -50,3 +50,33 @@ func TestParseDate(t *testing.T) {
 		t.Fatalf("expected error on bad date")
 	}
 }
+
+func TestSanitizeColor(t *testing.T) {
+	str := func(s string) *string { return &s }
+	cases := []struct {
+		name string
+		in   *string
+		want *string
+	}{
+		{"nil", nil, nil},
+		{"empty", str(""), nil},
+		{"whitespace", str("  "), nil},
+		{"valid lower", str("#aabbcc"), str("#aabbcc")},
+		{"valid mixed", str("#A1B2C3"), str("#A1B2C3")},
+		{"no hash", str("aabbcc"), nil},
+		{"short", str("#abc"), nil},
+		{"too long", str("#aabbccdd"), nil},
+		{"non-hex", str("#zzzzzz"), nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := sanitizeColor(c.in)
+			if (got == nil) != (c.want == nil) {
+				t.Fatalf("nilness mismatch: got=%v want=%v", got, c.want)
+			}
+			if got != nil && *got != *c.want {
+				t.Fatalf("got %q want %q", *got, *c.want)
+			}
+		})
+	}
+}

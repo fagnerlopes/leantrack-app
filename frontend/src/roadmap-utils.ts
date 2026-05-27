@@ -56,6 +56,20 @@ export function dateToFractional(dateStr: string | null): number | null {
   return monthIdx + (d - 1) / daysInMonth;
 }
 
+// Convention: a bar that ENDS on day D should visually extend through
+// the end of day D — i.e., to the start of day D+1. Using (d-1)/daysInMonth
+// (same as start) makes end-day-D bars appear to stop at the START of day D,
+// causing them to "swallow" the next item's start day in the visual timeline.
+export function endDateToFractional(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const base = (2026 - 1) * 12 + 5;
+  const absMonths = (y - 1) * 12 + m;
+  const monthIdx = absMonths - base;
+  return monthIdx + d / daysInMonth;
+}
+
 export function fmtDate(dateStr: string | null): string {
   if (!dateStr) return "—";
   return new Date(dateStr + "T12:00:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" });

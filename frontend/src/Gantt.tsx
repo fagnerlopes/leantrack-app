@@ -1,12 +1,14 @@
+import { useRef, useState } from "react";
 import type { Item } from "./api";
 import {
   MONTHS, TOTAL_MONTHS, LABEL_W, TODAY_FRAC, QUARTERS,
-  STATUS_META, BAR_COLORS, RISK_META, calcRisk, dateToFractional, fmtDate, hasExtDep,
+  STATUS_META, BAR_COLORS, RISK_META, calcRisk, dateToFractional, endDateToFractional, fmtDate, hasExtDep,
 } from "./roadmap-utils";
 
 type Props = {
   items: Item[];
   onSelect?: (it: Item) => void;
+  onReorder?: (status: string, orderedIds: number[]) => void;
   innerRef?: React.RefObject<HTMLDivElement | null>;
 };
 
@@ -54,11 +56,14 @@ function GanttBar({ item }: { item: Item }) {
   const hasMs = hasExtDep(item);
 
   const startFrac = item.startDate ? dateToFractional(item.startDate)! : TODAY_FRAC;
-  const endFrac = item.endDate ? dateToFractional(item.endDate)! : startFrac + 1;
+  const endFrac = item.endDate ? endDateToFractional(item.endDate)! : startFrac + 1;
   const left = Math.max(0, startFrac) * COL_W;
-  const width = Math.max(0.5, endFrac - Math.max(0, startFrac)) * COL_W;
+  // No half-month floor: tiny items can be very thin (we rely on minWidth: 8px
+  // for visibility). Forcing 0.5 month would make short tasks visually invade
+  // the next item's date range.
+  const width = Math.max(0, endFrac - Math.max(0, startFrac)) * COL_W;
 
-  const baseColor = BAR_COLORS[item.status] || "#64748b";
+  const baseColor = item.color || BAR_COLORS[item.status] || "#64748b";
   const barColor = isCritico ? "#dc2626" : isAlerta ? "#d97706" : baseColor;
   const msFrac = hasMs ? dateToFractional(item.extMilestone!) : null;
 
@@ -114,8 +119,11 @@ function ExtDepTag({ item }: { item: Item }) {
   );
 }
 
-export default function Gantt({ items, onSelect, innerRef }: Props) {
+export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
   const COL_PCT = 100 / TOTAL_MONTHS;
+  const draggingId = useRef<number | null>(null);
+  const draggingStatus = useRef<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
 
   const grouped: Record<string, Item[]> = {
     "em-andamento": items.filter(i => i.status === "em-andamento"),
@@ -123,6 +131,24 @@ export default function Gantt({ items, onSelect, innerRef }: Props) {
     "concluido": items.filter(i => i.status === "concluido"),
     "pausado": items.filter(i => i.status === "pausado"),
   };
+
+  function handleDrop(targetItem: Item) {
+    const fromId = draggingId.current;
+    const fromStatus = draggingStatus.current;
+    draggingId.current = null;
+    draggingStatus.current = null;
+    setDragOverId(null);
+    if (!onReorder || fromId == null || fromStatus == null) return;
+    if (fromStatus !== targetItem.status) return; // only reorder within same status group
+    if (fromId === targetItem.id) return;
+    const group = grouped[targetItem.status].slice();
+    const fromIdx = group.findIndex(i => i.id === fromId);
+    const toIdx = group.findIndex(i => i.id === targetItem.id);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const [moved] = group.splice(fromIdx, 1);
+    group.splice(toIdx, 0, moved);
+    onReorder(targetItem.status, group.map(i => i.id));
+  }
 
   return (
     <div ref={innerRef} style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0" }}>
@@ -183,12 +209,31 @@ export default function Gantt({ items, onSelect, innerRef }: Props) {
                 {group.map(item => {
                   const dep = item.dependencyId ? items.find(i => i.id === item.dependencyId) : null;
                   const risk = calcRisk(item);
+                  const isDragOver = dragOverId === item.id;
                   return (
                     <div key={item.id}
+                      draggable={!!onReorder}
+                      onDragStart={(e) => {
+                        if (!onReorder) return;
+                        draggingId.current = item.id;
+                        draggingStatus.current = item.status;
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragOver={(e) => {
+                        if (!onReorder) return;
+                        if (draggingStatus.current !== item.status) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        if (dragOverId !== item.id) setDragOverId(item.id);
+                      }}
+                      onDragLeave={() => { if (dragOverId === item.id) setDragOverId(null); }}
+                      onDrop={(e) => { e.preventDefault(); handleDrop(item); }}
+                      onDragEnd={() => { draggingId.current = null; draggingStatus.current = null; setDragOverId(null); }}
                       style={{
                         display: "flex", borderBottom: "1px solid #f1f5f9",
-                        background: risk === "critico" ? "#fff7f7" : "#fff",
-                        cursor: onSelect ? "pointer" : "default",
+                        background: isDragOver ? "#eef2ff" : risk === "critico" ? "#fff7f7" : "#fff",
+                        borderTop: isDragOver ? "2px solid #6366f1" : undefined,
+                        cursor: onSelect ? "pointer" : onReorder ? "grab" : "default",
                       }}
                       onClick={() => onSelect && onSelect(item)}
                     >

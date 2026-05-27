@@ -13,9 +13,11 @@ export type Item = {
   extDescription: string | null;
   extMilestone: string | null;
   sortOrder: number;
+  color: string | null;
 };
 
 export type ItemInput = Omit<Item, "id">;
+export type ReorderEntry = { id: number; sortOrder: number };
 
 async function req<T>(url: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
@@ -47,4 +49,6 @@ export const api = {
     req<Item>(`/api/items/${id}`, { method: "PUT", body: JSON.stringify(it) }),
   deleteItem: (id: number) =>
     req<void>(`/api/items/${id}`, { method: "DELETE" }),
+  reorderItems: (entries: ReorderEntry[]) =>
+    req<{ status: string }>("/api/items/reorder", { method: "PUT", body: JSON.stringify(entries) }),
 };

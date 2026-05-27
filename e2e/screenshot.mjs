@@ -32,5 +32,18 @@ await p3.waitForLoadState("networkidle");
 await p3.waitForTimeout(800);
 await p3.screenshot({ path: "/tmp/03-admin.png", fullPage: true });
 
+// 5. Roadmap with edit modal opened (admin click on first item)
+const p4 = await ctx.newPage();
+await p4.goto(`${VITE}/`);
+await p4.waitForLoadState("networkidle");
+await p4.waitForTimeout(500);
+// Click first item row inside the Gantt (after the status group header)
+const firstItem = p4.locator("text=Migração").first();
+if (await firstItem.count()) {
+  await firstItem.click();
+  await p4.waitForTimeout(400);
+  await p4.screenshot({ path: "/tmp/04-roadmap-edit.png", fullPage: true });
+}
+
 await b.close();
 console.log("done");

@@ -23,6 +23,7 @@ type RoadmapItem struct {
 	SortOrder      int32              `json:"sort_order"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	Color          *string            `json:"color"`
 }
 
 type Session struct {
