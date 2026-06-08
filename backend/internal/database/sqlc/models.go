@@ -8,6 +8,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Roadmap struct {
+	ID          int64              `json:"id"`
+	OwnerID     int64              `json:"owner_id"`
+	Name        string             `json:"name"`
+	Slug        string             `json:"slug"`
+	Description string             `json:"description"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type RoadmapItem struct {
 	ID             int64              `json:"id"`
 	Title          string             `json:"title"`
@@ -25,6 +35,7 @@ type RoadmapItem struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	Color          *string            `json:"color"`
 	EpicUrl        *string            `json:"epic_url"`
+	RoadmapID      *int64             `json:"roadmap_id"`
 }
 
 type Session struct {
