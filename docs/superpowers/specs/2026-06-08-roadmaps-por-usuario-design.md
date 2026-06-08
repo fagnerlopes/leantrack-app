@@ -46,7 +46,7 @@ Registrar como ADR: `docs/adr/004-autorizacao-por-propriedade.md`.
 | `id` | BIGSERIAL PK | identificador interno |
 | `owner_id` | BIGINT NOT NULL FK → users(id) ON DELETE CASCADE | dono |
 | `name` | TEXT NOT NULL | identificador humano (padrão `Roadmap [Produto] [Ano]`) |
-| `slug` | TEXT NOT NULL UNIQUE | versão URL-friendly do nome; usada no modal de exclusão e em URLs |
+| `slug` | TEXT NOT NULL | rótulo URL-friendly do nome; usado no modal de exclusão e como enfeite na URL. **Não é chave** (ver 3.1.1) |
 | `description` | TEXT NOT NULL DEFAULT '' | opcional |
 | `created_at` | TIMESTAMPTZ NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMPTZ NOT NULL DEFAULT now() | |
@@ -54,9 +54,24 @@ Registrar como ADR: `docs/adr/004-autorizacao-por-propriedade.md`.
 - Restrição: `UNIQUE (owner_id, name)` — a mesma pessoa não pode ter dois roadmaps com
   nome idêntico. Nomes iguais entre donos diferentes são permitidos (a listagem mostra
   "nome — dono").
-- `slug` é **único globalmente** e gerado a partir do `name` (minúsculo, sem acento,
-  espaços→hífen). Em colisão, acrescenta sufixo numérico: `roadmap-vps-2026-2`.
 - Índice: `roadmaps_owner_idx` em `owner_id`.
+
+### 3.1.1 Chave de endereçamento: ID, não slug
+
+O **`id`** (interno, imutável) é a chave de endereçamento de roadmaps — em URLs e na API.
+O **`slug`** é apenas um rótulo legível, **não é único** globalmente e **não é usado para
+rotear**. Decisão tomada em conjunto com o usuário (2026-06-08):
+
+- URLs no formato `/roadmaps/{id}-{slug}` (estilo Stack Overflow): o `{id}` determina o
+  destino; o `{slug}` é enfeite legível e pode ser ignorado pelo backend.
+- Vantagens: sem sufixos `-2` em colisão de nomes entre donos; renomear o roadmap **não
+  quebra** URLs antigas (o ID não muda); o slug sempre combina com o nome.
+- `slug` é gerado deterministicamente do `name` (minúsculo, sem acento, espaços→hífen).
+  Como `name` já é único por dono, o slug é naturalmente único por dono — sem necessidade
+  de sufixo numérico.
+- **Confirmação de exclusão:** o alvo é sempre o roadmap pelo `id`; o backend apenas checa
+  se o texto digitado (`confirm_slug`) bate com o slug **daquele** roadmap. Unicidade
+  global é irrelevante para isso.
 
 ### 3.2 Alteração em `roadmap_items`
 
@@ -103,27 +118,27 @@ Padrão atual: `net/http` ServeMux (Go 1.22) com middlewares `auth.Middleware` (
 
 Adicionar helper de propriedade em `backend/internal/auth/` (ou pacote `authz`):
 
-- `RequireRoadmapOwner` — middleware/func que, dado o `roadmap_id` ou `slug` da rota,
+- `RequireRoadmapOwner` — middleware/func que, dado o `roadmap_id` (`{id}`) da rota,
   carrega o roadmap e exige `roadmap.owner_id == SessionUser.ID`; caso contrário responde
   **403 Forbidden**. Leitura não passa por essa trava.
 
 ### 5.2 Endpoints
 
-Roadmaps:
+Roadmaps (endereçados por `id`; ver 3.1.1):
 - `GET  /api/roadmaps` — lista todos (auth). Suporta `?mine=true` para "Meus roadmaps".
-  Retorna nome, slug, dono (id+nome), contagem de itens.
+  Retorna id, nome, slug, dono (id+nome), contagem de itens.
 - `POST /api/roadmaps` — cria (auth; vira dono). Gera slug; valida `UNIQUE(owner_id,name)`.
-- `GET  /api/roadmaps/{slug}` — detalhe (auth). Inclui flag `can_edit` (dono == eu).
-- `PUT  /api/roadmaps/{slug}` — edita nome/descrição (auth + owner).
-- `DELETE /api/roadmaps/{slug}` — apaga (auth + owner). Corpo exige `confirm_slug` igual ao
-  slug; caso contrário 400.
+- `GET  /api/roadmaps/{id}` — detalhe (auth). Inclui flag `can_edit` (dono == eu).
+- `PUT  /api/roadmaps/{id}` — edita nome/descrição (auth + owner). Renomear regenera o slug.
+- `DELETE /api/roadmaps/{id}` — apaga (auth + owner). Corpo exige `confirm_slug` igual ao
+  slug **daquele** roadmap; caso contrário 400.
 
-Itens (passam a ser escopados por roadmap):
-- `GET    /api/roadmaps/{slug}/items` — lista itens do roadmap (auth).
-- `POST   /api/roadmaps/{slug}/items` — cria item (auth + owner).
-- `PUT    /api/roadmaps/{slug}/items/reorder` — reordena (auth + owner).
-- `PUT    /api/roadmaps/{slug}/items/{id}` — edita item (auth + owner).
-- `DELETE /api/roadmaps/{slug}/items/{id}` — apaga item (auth + owner).
+Itens (escopados por roadmap, via `roadmap_id` = `{id}`):
+- `GET    /api/roadmaps/{id}/items` — lista itens do roadmap (auth).
+- `POST   /api/roadmaps/{id}/items` — cria item (auth + owner).
+- `PUT    /api/roadmaps/{id}/items/reorder` — reordena (auth + owner).
+- `PUT    /api/roadmaps/{id}/items/{itemId}` — edita item (auth + owner).
+- `DELETE /api/roadmaps/{id}/items/{itemId}` — apaga item (auth + owner).
 
 Administração de contas (auth + RequireAdmin):
 - `GET    /api/admin/users` — lista usuários.
@@ -140,7 +155,7 @@ Observações:
 ### 5.3 Queries (sqlc)
 
 Novos arquivos/queries em `backend/internal/database/queries/`:
-- `roadmaps.sql`: ListRoadmaps, ListMyRoadmaps, GetRoadmapBySlug, CreateRoadmap,
+- `roadmaps.sql`: ListRoadmaps, ListMyRoadmaps, GetRoadmapByID, CreateRoadmap,
   UpdateRoadmap, DeleteRoadmap, CountItemsByRoadmap.
 - `items.sql`: adicionar `roadmap_id` em CreateItem; escopar ListItems/Get/Update/Delete/
   Reorder por `roadmap_id`; checagens garantem que o item pertence ao roadmap informado.
@@ -170,6 +185,8 @@ type Authenticator interface {
 ## 7. Frontend (React)
 
 - **Tela inicial = "Meus roadmaps"** após login. Aba/atalho para "Todos os roadmaps".
+- **Roteamento por ID**: a URL de um roadmap é `/roadmaps/{id}-{slug}` (ver 3.1.1); o `{id}`
+  resolve o destino e o `{slug}` é só legibilidade.
 - **Lista de roadmaps**: cartões/linhas "nome — dono" + contagem de itens. Botão
   "+ Novo roadmap".
 - **Criar roadmap**: formulário com `name` (placeholder *Ex.: Roadmap VPS 2026*) e
@@ -191,7 +208,9 @@ Backend (Go):
 - Qualquer usuário logado lista e vê qualquer roadmap → OK.
 - Apenas admin acessa `/api/admin/*` → não-admin recebe 403.
 - DELETE de roadmap sem `confirm_slug` correto → 400.
-- Geração de slug: normalização e desambiguação por sufixo.
+- Geração de slug: normalização (minúsculo, sem acento, espaços→hífen).
+- Roteamento por ID: URL com slug "errado" mas ID certo ainda resolve o roadmap; renomear
+  não quebra acesso pelo ID.
 - Migração: itens existentes ficam atribuídos ao roadmap da Eduarda; `roadmap_id` NOT NULL
   ao final; papéis `viewer`→`user`.
 
