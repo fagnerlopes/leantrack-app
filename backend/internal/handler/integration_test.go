@@ -210,6 +210,52 @@ func TestAdminUsersGate(t *testing.T) {
 	}
 }
 
+func TestSetInitialAdminPasswords(t *testing.T) {
+	if testPool == nil {
+		t.Skip("DATABASE_URL não definido; pulando teste de integração")
+	}
+	ctx := context.Background()
+	tx, err := testPool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := sqlc.New(tx)
+
+	// Admin sem senha local, como os admins fixos criados pela migração 006.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO users (email, password_hash, name, role) VALUES ($1, NULL, $2, 'admin')`,
+		"sso-admin@test.local", "SSO Admin"); err != nil {
+		t.Fatalf("insert admin sem senha: %v", err)
+	}
+
+	hash, _ := auth.HashPassword("senha-inicial")
+	if err := q.SetInitialAdminPasswords(ctx, &hash); err != nil {
+		t.Fatalf("set initial passwords: %v", err)
+	}
+
+	u, err := q.GetUserByEmail(ctx, "sso-admin@test.local")
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if u.PasswordHash == nil {
+		t.Fatal("password_hash deveria estar definido após o seed")
+	}
+	if !auth.CheckPassword(*u.PasswordHash, "senha-inicial") {
+		t.Fatal("senha inicial não confere")
+	}
+
+	// Idempotência: rodar de novo não sobrescreve a senha já definida.
+	hash2, _ := auth.HashPassword("outra-senha")
+	if err := q.SetInitialAdminPasswords(ctx, &hash2); err != nil {
+		t.Fatalf("set initial passwords (2): %v", err)
+	}
+	u2, _ := q.GetUserByEmail(ctx, "sso-admin@test.local")
+	if !auth.CheckPassword(*u2.PasswordHash, "senha-inicial") {
+		t.Fatal("senha não deveria mudar numa segunda execução (idempotência)")
+	}
+}
+
 // itoa converte int64 sem depender de fmt.
 func itoa(n int64) string {
 	if n == 0 {

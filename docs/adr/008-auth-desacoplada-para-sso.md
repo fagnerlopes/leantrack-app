@@ -2,6 +2,15 @@
 
 **Status:** Accepted — interface e modelo de dados implementados na Fase 2 (migração 006; `auth.Authenticator` + `auth.LocalAuthenticator`).
 
+> **Atualização (Fase 3, 2026-06-08):** enquanto o SSO não está ativo, os admins
+> fixos (criados pela migração 006 **sem senha local**) recebem uma **senha
+> inicial** no startup, via `SetInitialAdminPasswords` em `cmd/server/main.go`,
+> reaproveitando o segredo `SEED_ADMIN_PASSWORD`. A operação é idempotente: só
+> preenche `password_hash` quando está NULL, nunca sobrescreve uma senha já
+> definida. Quando o `KeycloakAuthenticator` entrar, esses usuários passam a
+> autenticar via OIDC (`auth_provider`/`external_id`) e a senha local deixa de ser
+> usada.
+
 > Nota de numeração: o spec/plano referem-se a este ADR como "005"; ver a nota no
 > ADR 007. Conteúdo conforme seções 3.3 e 6 do spec
 > `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md`.

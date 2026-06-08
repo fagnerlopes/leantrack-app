@@ -104,3 +104,5 @@ Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · ADRs
 > **Nota:** com a Fase 3 concluída, o frontend consome exclusivamente as rotas
 > escopadas por roadmap; as rotas de compatibilidade `/api/items*` deixaram de
 > existir.
+
+| Senha inicial para admins fixos (acesso ao ambiente publicado) | Done | `SetInitialAdminPasswords` no startup preenche `password_hash` dos admins sem senha local (fagner/marcus/eduarda) com o segredo `SEED_ADMIN_PASSWORD`; idempotente; teste de integração `TestSetInitialAdminPasswords`. Ver nota no ADR 008 |

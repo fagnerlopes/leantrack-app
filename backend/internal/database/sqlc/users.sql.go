@@ -236,6 +236,21 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 	return items, nil
 }
 
+const setInitialAdminPasswords = `-- name: SetInitialAdminPasswords :exec
+UPDATE users
+SET password_hash = $1
+WHERE role = 'admin' AND password_hash IS NULL
+`
+
+// SetInitialAdminPasswords define uma senha inicial para admins que ainda não
+// têm senha local (ex.: os admins fixos criados pela migração 006, prontos para
+// SSO). Idempotente: só afeta linhas com password_hash NULL, nunca sobrescreve
+// uma senha já definida.
+func (q *Queries) SetInitialAdminPasswords(ctx context.Context, passwordHash *string) error {
+	_, err := q.db.Exec(ctx, setInitialAdminPasswords, passwordHash)
+	return err
+}
+
 const updateUserRole = `-- name: UpdateUserRole :one
 UPDATE users SET role = $2 WHERE id = $1
 RETURNING id, email, name, role, auth_provider, created_at

@@ -16,6 +16,15 @@ SET password_hash = EXCLUDED.password_hash,
     name = EXCLUDED.name,
     role = EXCLUDED.role;
 
+-- SetInitialAdminPasswords define uma senha inicial para admins que ainda não
+-- têm senha local (ex.: os admins fixos criados pela migração 006, prontos para
+-- SSO). Idempotente: só afeta linhas com password_hash NULL, nunca sobrescreve
+-- uma senha já definida.
+-- name: SetInitialAdminPasswords :exec
+UPDATE users
+SET password_hash = $1
+WHERE role = 'admin' AND password_hash IS NULL;
+
 -- name: ListUsers :many
 SELECT id, email, name, role, auth_provider, created_at
 FROM users
