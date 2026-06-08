@@ -100,10 +100,19 @@ func main() {
 				}
 				if r.URL.Path != "/" {
 					if _, err := os.Stat(filepath.Join(frontendDist, filepath.Clean(r.URL.Path))); err == nil {
+						// Assets têm nome com hash de conteúdo (ex.: index-OWB6SsbT.js):
+						// são imutáveis e podem ser cacheados por bastante tempo.
+						if strings.HasPrefix(r.URL.Path, "/assets/") {
+							w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+						}
 						fs.ServeHTTP(w, r)
 						return
 					}
 				}
+				// index.html NÃO pode ser cacheado: ele aponta para os assets hasheados,
+				// então precisa ser sempre revalidado para que um novo deploy apareça
+				// imediatamente (evita servir uma versão antiga do app após o deploy).
+				w.Header().Set("Cache-Control", "no-cache")
 				http.ServeFile(w, r, filepath.Join(frontendDist, "index.html"))
 			})
 		} else {
