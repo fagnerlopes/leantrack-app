@@ -222,11 +222,14 @@ func TestSetInitialAdminPasswords(t *testing.T) {
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := sqlc.New(tx)
 
-	// Admin sem senha local, como os admins fixos criados pela migração 006.
+	// Dois admins sem senha local utilizável: um com NULL (migração 006) e outro
+	// com string vazia (migração 005). Ambos devem receber a senha inicial.
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO users (email, password_hash, name, role) VALUES ($1, NULL, $2, 'admin')`,
-		"sso-admin@test.local", "SSO Admin"); err != nil {
-		t.Fatalf("insert admin sem senha: %v", err)
+		`INSERT INTO users (email, password_hash, name, role) VALUES
+		   ($1, NULL, $2, 'admin'),
+		   ($3, '',   $4, 'admin')`,
+		"sso-null@test.local", "SSO Null", "sso-empty@test.local", "SSO Empty"); err != nil {
+		t.Fatalf("insert admins sem senha: %v", err)
 	}
 
 	hash, _ := auth.HashPassword("senha-inicial")
@@ -234,15 +237,14 @@ func TestSetInitialAdminPasswords(t *testing.T) {
 		t.Fatalf("set initial passwords: %v", err)
 	}
 
-	u, err := q.GetUserByEmail(ctx, "sso-admin@test.local")
-	if err != nil {
-		t.Fatalf("get user: %v", err)
-	}
-	if u.PasswordHash == nil {
-		t.Fatal("password_hash deveria estar definido após o seed")
-	}
-	if !auth.CheckPassword(*u.PasswordHash, "senha-inicial") {
-		t.Fatal("senha inicial não confere")
+	for _, email := range []string{"sso-null@test.local", "sso-empty@test.local"} {
+		u, err := q.GetUserByEmail(ctx, email)
+		if err != nil {
+			t.Fatalf("get user %s: %v", email, err)
+		}
+		if u.PasswordHash == nil || !auth.CheckPassword(*u.PasswordHash, "senha-inicial") {
+			t.Fatalf("senha inicial não aplicada para %s", email)
+		}
 	}
 
 	// Idempotência: rodar de novo não sobrescreve a senha já definida.
@@ -250,7 +252,7 @@ func TestSetInitialAdminPasswords(t *testing.T) {
 	if err := q.SetInitialAdminPasswords(ctx, &hash2); err != nil {
 		t.Fatalf("set initial passwords (2): %v", err)
 	}
-	u2, _ := q.GetUserByEmail(ctx, "sso-admin@test.local")
+	u2, _ := q.GetUserByEmail(ctx, "sso-null@test.local")
 	if !auth.CheckPassword(*u2.PasswordHash, "senha-inicial") {
 		t.Fatal("senha não deveria mudar numa segunda execução (idempotência)")
 	}

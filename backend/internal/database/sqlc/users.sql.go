@@ -239,13 +239,13 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 const setInitialAdminPasswords = `-- name: SetInitialAdminPasswords :exec
 UPDATE users
 SET password_hash = $1
-WHERE role = 'admin' AND password_hash IS NULL
+WHERE role = 'admin' AND (password_hash IS NULL OR password_hash = '')
 `
 
 // SetInitialAdminPasswords define uma senha inicial para admins que ainda não
-// têm senha local (ex.: os admins fixos criados pela migração 006, prontos para
-// SSO). Idempotente: só afeta linhas com password_hash NULL, nunca sobrescreve
-// uma senha já definida.
+// têm senha local utilizável (NULL ou string vazia — ex.: os admins fixos das
+// migrações 005/006, prontos para SSO). Idempotente: nunca sobrescreve um hash
+// bcrypt já definido.
 func (q *Queries) SetInitialAdminPasswords(ctx context.Context, passwordHash *string) error {
 	_, err := q.db.Exec(ctx, setInitialAdminPasswords, passwordHash)
 	return err
