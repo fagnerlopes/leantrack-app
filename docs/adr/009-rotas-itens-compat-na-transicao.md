@@ -1,6 +1,10 @@
 # 009 - Rotas de itens em compatibilidade durante a transição Fase 2 → Fase 3
 
-**Status:** Accepted
+**Status:** Accepted — encerrado na Fase 3 (2026-06-08): as rotas legadas
+`/api/items*`, o helper `institutionalRoadmapID` e a constante
+`institutionalSlug` foram **removidos** do backend após o frontend migrar para as
+rotas escopadas (`/api/roadmaps/{id}/items*`). O roadmap institucional continua
+existindo normalmente; apenas o atalho de compatibilidade deixou de existir.
 
 ## Context
 

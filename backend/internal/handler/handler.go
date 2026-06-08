@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -19,10 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-// institutionalSlug identifica o roadmap institucional para o qual as rotas
-// legadas /api/items* continuam apontando durante a transição (Fase 2 → 3).
-const institutionalSlug = "roadmap-squad-cloud-2026"
 
 // isUniqueViolation reporta se o erro é uma violação de UNIQUE do Postgres (23505).
 func isUniqueViolation(err error) bool {
@@ -119,14 +114,6 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /api/admin/users", adminM(http.HandlerFunc(h.createUser)))
 	mux.Handle("DELETE /api/admin/users/{id}", adminM(http.HandlerFunc(h.deleteUser)))
 	mux.Handle("PUT /api/admin/users/{id}/role", adminM(http.HandlerFunc(h.updateUserRole)))
-
-	// Rotas legadas /api/items* — compatibilidade até a Fase 3 migrar o
-	// frontend. Operam sobre o roadmap institucional; mutação só admin.
-	mux.Handle("GET /api/items", authM(http.HandlerFunc(h.listItems)))
-	mux.Handle("POST /api/items", authM(auth.RequireAdmin(http.HandlerFunc(h.createItem))))
-	mux.Handle("PUT /api/items/reorder", authM(auth.RequireAdmin(http.HandlerFunc(h.reorderItems))))
-	mux.Handle("PUT /api/items/{id}", authM(auth.RequireAdmin(http.HandlerFunc(h.updateItem))))
-	mux.Handle("DELETE /api/items/{id}", authM(auth.RequireAdmin(http.HandlerFunc(h.deleteItem))))
 
 	// Dev-only login
 	if h.Cfg.DevMode {
@@ -329,68 +316,10 @@ func (req itemReq) validate() error {
 	return nil
 }
 
-// institutionalRoadmapID resolve o id do roadmap institucional, usado pelas
-// rotas legadas /api/items* enquanto o frontend não migra (Fase 3).
-func (h *Handler) institutionalRoadmapID(ctx context.Context) (int64, error) {
-	rm, err := h.Q.GetRoadmapBySlug(ctx, institutionalSlug)
-	if err != nil {
-		return 0, err
-	}
-	return rm.ID, nil
-}
-
-// reorderEntry é usado tanto pelas rotas legadas quanto pelas escopadas.
+// reorderEntry é o payload de reordenação de itens (rotas escopadas por roadmap).
 type reorderEntry struct {
 	ID        int64 `json:"id"`
 	SortOrder int32 `json:"sortOrder"`
-}
-
-// ── Rotas legadas /api/items* (compatibilidade Fase 2 → 3) ──────
-// Operam sobre o roadmap institucional; mutação restrita a admin (RequireAdmin).
-
-func (h *Handler) listItems(w http.ResponseWriter, r *http.Request) {
-	rid, err := h.institutionalRoadmapID(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
-		return
-	}
-	h.writeItemsByRoadmap(w, r, rid)
-}
-
-func (h *Handler) createItem(w http.ResponseWriter, r *http.Request) {
-	rid, err := h.institutionalRoadmapID(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
-		return
-	}
-	h.createItemInRoadmap(w, r, rid)
-}
-
-func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
-	rid, err := h.institutionalRoadmapID(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
-		return
-	}
-	h.updateItemInRoadmap(w, r, rid)
-}
-
-func (h *Handler) reorderItems(w http.ResponseWriter, r *http.Request) {
-	rid, err := h.institutionalRoadmapID(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
-		return
-	}
-	h.reorderItemsInRoadmap(w, r, rid)
-}
-
-func (h *Handler) deleteItem(w http.ResponseWriter, r *http.Request) {
-	rid, err := h.institutionalRoadmapID(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
-		return
-	}
-	h.deleteItemInRoadmap(w, r, rid)
 }
 
 // ── Itens escopados por roadmap (handlers compartilhados) ───────

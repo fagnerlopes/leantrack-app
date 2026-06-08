@@ -84,11 +84,24 @@ Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · ADRs
 > **Nota:** o frontend permanece inalterado nesta fase e continua consumindo
 > `/api/items*` (compat). A migração para as rotas escopadas é a Fase 3.
 
-### Fase 3 — Frontend (pendente)
-- Setup Vitest + Testing Library.
-- "Meus roadmaps" / "Todos os roadmaps"; criar roadmap.
-- Roteamento por ID (`/roadmaps/{id}-{slug}`); modo leitura (flag `can_edit`) e modo edição.
-- Modal de exclusão com confirmação por slug.
-- Painel "Usuários" só para admins.
-- Atualizar `frontend/src/api.ts`; remover chamadas a `/api/items*`.
-- Verificação visual com Playwright.
+## Sessão 08/06/2026 (Fase 3) — Frontend de roadmaps por usuário
+
+Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · ADRs: 007 (propriedade), 008 (auth desacoplada), 009 (rotas legadas — encerrado nesta fase)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Setup Vitest + Testing Library + jsdom | Done | `vitest@4` (alinhado ao Vite 8/rolldown), `@testing-library/react`, setup em `src/test/setup.ts`; script `npm test`; types em `tsconfig.app.json` |
+| `api.ts` reescrito (roadmaps + itens escopados + admin/users) | Done | Removidas as chamadas a `/api/items*`; tipos `Roadmap`, `AdminUser`, `RoadmapInput` |
+| Helper de URL `/roadmaps/{id}-{slug}` (roteia pelo id) | Done | `roadmap-path.ts` (`roadmapPath`/`parseRoadmapId`); slug é só enfeite |
+| Tela inicial "Meus roadmaps" / "Todos os roadmaps" | Done | `RoadmapList.tsx`; abas, cards "nome — dono · N iniciativas", selo "SEU", "+ Novo roadmap" + modal |
+| Visão do roadmap: modo edição (dono) e leitura (não-dono) | Done | `RoadmapView.tsx`; Gantt + filtros + export reaproveitados; selo "🔒 Somente leitura — roadmap de {dono}" quando `canEdit=false` |
+| Criar/renomear/excluir roadmap | Done | Criar abre em modo edição; renomear regenera slug no backend; exclusão por modal que só libera com o slug exato (`confirmSlug`) |
+| Painel "Usuários" (somente admin) | Done | `Users.tsx`; listar/criar/remover/alterar papel; "Remover" desabilitado para a própria conta; guard de rota em `App.tsx` (`Protected adminOnly`) |
+| Remoção das rotas legadas `/api/items*` no backend | Done | Removidos handlers legados, `institutionalRoadmapID` e `institutionalSlug`; `go vet`/`go test ./...` verdes (ADR 009 encerrado) |
+| Testes frontend (Vitest) | Done | 15 testes / 5 arquivos: rota inicial "Meus roadmaps", modo leitura sem controles, modal de exclusão só com slug exato, painel de usuários só admin, helper de URL |
+| Type-check + build de produção | Done | `tsc -b` e `vite build` passam |
+| Verificação visual (Playwright) | Done | 7 screenshots: login, meus/todos roadmaps, modo leitura, painel de usuários, modo edição da dona — revisadas |
+
+> **Nota:** com a Fase 3 concluída, o frontend consome exclusivamente as rotas
+> escopadas por roadmap; as rotas de compatibilidade `/api/items*` deixaram de
+> existir.

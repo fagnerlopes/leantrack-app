@@ -8,7 +8,7 @@ A aplicação está evoluindo de **um único roadmap compartilhado** para **vár
 
 - **Fase 1 (concluída):** fundação de dados — tabela `roadmaps`, vínculo `roadmap_items.roadmap_id`, e migração dos dados atuais para o roadmap institucional **"Roadmap Squad Cloud 2026"** (dono: Eduarda Moraes). Sem mudança visível na aplicação.
 - **Fase 2 (concluída):** backend — endpoints por roadmap (`/api/roadmaps*`) e itens escopados (`/api/roadmaps/{id}/items*`), autorização por propriedade (`RequireRoadmapOwner`), gestão de contas por admin (`/api/admin/users*`), autenticação desacoplada (interface `Authenticator` — preparação SSO), `roadmap_id` agora obrigatório. As rotas legadas `/api/items*` seguem ativas em compatibilidade até a Fase 3 (ver ADR 009); o frontend ainda não mudou.
-- **Fase 3 (pendente):** frontend — telas "Meus roadmaps" / "Todos os roadmaps", modo leitura para não-donos, criação/exclusão de roadmaps, painel de usuários.
+- **Fase 3 (concluída):** frontend — telas "Meus roadmaps" / "Todos os roadmaps", roteamento por id (`/roadmaps/{id}-{slug}`), modo leitura para não-donos (selo "Somente leitura"), criação/renomeação/exclusão de roadmaps (exclusão confirmada por slug), e painel "Usuários" só para admins. O frontend passou a consumir exclusivamente as rotas escopadas por roadmap; as rotas legadas `/api/items*` foram removidas (ver ADR 009).
 
 ### Modelo de propriedade (alvo das Fases 2–3)
 
@@ -28,7 +28,16 @@ Tudo é protegido por autenticação; nada é público.
 
 ## Funcionalidades principais
 
-### Visualização do roadmap (`/`)
+### Lista de roadmaps (`/`)
+- Tela inicial após o login, com abas **"Meus roadmaps"** (os que você criou) e **"Todos os roadmaps"** (todos da empresa, em leitura).
+- Cada roadmap aparece como um cartão com nome, dono e número de iniciativas; um selo "SEU" marca os seus.
+- Botão **"+ Novo roadmap"** (padrão de nome `Roadmap [Produto] [Ano]`); ao criar, abre direto em modo edição.
+- Acesso ao painel **"Usuários"** apenas para administradores.
+
+### Visualização do roadmap (`/roadmaps/{id}-{slug}`)
+- Endereçado pelo **id** (imutável); o slug é apenas enfeite legível e não quebra ao renomear.
+- **Dono:** modo edição completo — criar/editar iniciativas, arrastar para reordenar, cores, datas, link do épico, além de **renomear** e **excluir** o roadmap (exclusão confirmada digitando o slug exato).
+- **Não-dono:** modo **somente leitura**, com selo "🔒 Somente leitura — roadmap de {dono}" e sem controles de edição.
 - Gantt horizontal Mai/26 → Mai/27 com cabeçalho por trimestre (Q2/26 ... Q2/27).
 - Itens agrupados por status: Em andamento, Não iniciado, Concluído, Pausado.
 - Barras com cores por status; barra tracejada vermelha/amarela para itens em risco.
@@ -38,10 +47,13 @@ Tudo é protegido por autenticação; nada é público.
 - Filtros: por status, por trimestre, apenas em risco.
 - Exportar como PNG (alta resolução, 2× pixel ratio) e como PDF (paisagem) para uso em apresentações.
 
-### Dashboard de gestão (`/admin`) — apenas role `admin`
-- Tabela com todas as iniciativas, status, datas, progresso, dependência externa, risco e ações.
-- Modal de criação/edição com todos os campos da iniciativa, incluindo dependência interna (outra iniciativa) e bloco de dependência externa (time, descrição, marco).
-- Remoção com confirmação.
+### Edição de iniciativas (dentro do roadmap, para o dono)
+- Modal de criação/edição com todos os campos da iniciativa, incluindo dependência interna (outra iniciativa) e bloco de dependência externa (time, descrição, marco), cor do card e link do épico.
+- Reordenação por arrastar dentro do mesmo status; remoção com confirmação.
+
+### Painel de usuários (`/admin/users`) — apenas role `admin`
+- Listar contas, criar usuário (nome, e-mail, senha inicial, papel), alterar papel (`user`/`admin`) e remover.
+- Proteções: não é possível remover a própria conta nem rebaixar/remover o último admin.
 
 ### Login (`/login`)
 - Email + senha.
@@ -50,8 +62,10 @@ Tudo é protegido por autenticação; nada é público.
 
 ## Fluxos do usuário
 
-1. **Diretoria entra para apresentar o roadmap:** abre `/`, faz login → vê Gantt completo → filtra por trimestre → clica "Exportar PDF" → cola no deck.
-2. **PM/Tech Lead atualiza o roadmap:** entra em `/admin` → edita item → ajusta progresso, datas, marca dependência externa → salva → diretoria vê atualização ao recarregar.
+1. **Diretoria entra para apresentar o roadmap:** faz login → escolhe o roadmap em "Todos os roadmaps" → abre o Gantt (modo leitura) → filtra por trimestre → clica "Exportar PDF" → cola no deck.
+2. **PM/Tech Lead atualiza o próprio roadmap:** em "Meus roadmaps" abre o seu roadmap (modo edição) → clica numa iniciativa → ajusta progresso, datas, dependência externa → salva; ou cria uma nova iniciativa. Quem consultar o roadmap vê a atualização ao recarregar.
+3. **Novo setor começa a usar:** cria "+ Novo roadmap" (ex.: "Roadmap VPS 2026"), que abre em modo edição para cadastrar as iniciativas.
+4. **Admin gerencia acesso:** abre "Usuários", cria a conta do novo PM com papel `user` e informa a senha inicial.
 
 ## Requisitos não funcionais
 
