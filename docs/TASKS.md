@@ -21,8 +21,7 @@
 | Dockerfile multi-stage | Done | Pronto para Locaweb Cloud |
 | Documentação (PRD, TASKS, ADRs, INFRASTRUCTURE) | Done | — |
 | Commit + push | Done | — |
-| Deploy preview Locaweb Cloud | In Progress | Primeira tentativa falhou (orquestrador Locaweb retornou erro 530 ao criar VM web — estado parcial). Teardown executado, redisparando deploy. |
-# Retry deploy attempt 19:31:45
+| Deploy preview Locaweb Cloud | Done | Ambiente `roadmap` (zona ZP02) no ar; deploy automático a cada push na `main`. URL: https://187.45.201.251.nip.io (`/up` → 200). Fases 1, 2 e 3 publicadas com sucesso. |
 
 ## Sessão 27/05/2026 — novas features no roadmap
 
