@@ -2,12 +2,27 @@
 
 ## Visão geral
 
-Aplicação web interna que apresenta para a diretoria o roadmap das iniciativas da Squad Cloud em formato Gantt, com visualização temporal por trimestres, sinalização automática de riscos e dependências externas. O conteúdo é gerenciado por administradores através de um dashboard de gestão.
+Aplicação web interna que apresenta roadmaps de iniciativas em formato Gantt, com visualização temporal por trimestres, sinalização automática de riscos e dependências externas.
+
+A aplicação está evoluindo de **um único roadmap compartilhado** para **vários roadmaps, cada um com um dono** — permitindo que diferentes setores da empresa usem a ferramenta. Esta evolução é faseada (ver `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md`):
+
+- **Fase 1 (concluída):** fundação de dados — tabela `roadmaps`, vínculo `roadmap_items.roadmap_id`, e migração dos dados atuais para o roadmap institucional **"Roadmap Squad Cloud 2026"** (dono: Eduarda Moraes). Sem mudança visível na aplicação.
+- **Fase 2 (pendente):** backend — endpoints por roadmap, autorização por propriedade, gestão de contas por admin, autenticação desacoplada (preparação SSO).
+- **Fase 3 (pendente):** frontend — telas "Meus roadmaps" / "Todos os roadmaps", modo leitura para não-donos, criação/exclusão de roadmaps, painel de usuários.
+
+### Modelo de propriedade (alvo das Fases 2–3)
+
+- Cada usuário pode criar **vários** roadmaps (padrão de nome `Roadmap [Produto] [Ano]`, ex.: "Roadmap VPS 2026").
+- **Todos os usuários logados veem** todos os roadmaps (modo leitura).
+- **Somente o dono** edita/apaga/reordena o próprio roadmap e seus itens.
+- **Admins** (3 e-mails fixos) gerenciam **contas**; quanto a roadmaps, são iguais a qualquer usuário (editam só os que criaram).
+- Não é multitenant: todos pertencem à mesma empresa; o controle é de **propriedade**, não de isolamento entre organizações.
 
 ## Público-alvo
 
-- **Diretoria (viewers):** consultam o roadmap, filtram por status/trimestre, exportam visualizações para PDF/PNG (para slides e relatórios).
-- **Administradores:** mantêm o roadmap atualizado via dashboard — criam, editam e removem iniciativas, registram dependências externas e marcos.
+- **Usuários (leitura + donos):** consultam qualquer roadmap, filtram por status/trimestre, exportam PDF/PNG; editam apenas os roadmaps que criaram.
+- **Diretoria (leitura):** consultam roadmaps e exportam visualizações para slides e relatórios.
+- **Administradores:** além do acima, gerenciam contas de usuários (criar/remover, definir papel).
 
 Tudo é protegido por autenticação; nada é público.
 
@@ -48,9 +63,11 @@ Tudo é protegido por autenticação; nada é público.
 
 ## Fora de escopo (versão 1)
 
-- Cadastro aberto / convites por admin (futuro).
+- Auto-registro de usuários (admin cria contas).
+- Integração efetiva com Keycloak (apenas o "encaixe" é preparado — ver ADR 008).
+- Cor/área por roadmap, compartilhamento granular, comentários, histórico de versões.
+- Isolamento multitenant entre organizações distintas.
 - Histórico de alterações (audit log).
-- Comentários/colaboração em itens.
 - Notificações por email.
 - Integração com Jira/Linear.
 - Granularidade abaixo de dia (horas/sprints).

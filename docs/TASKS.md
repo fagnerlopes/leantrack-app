@@ -45,3 +45,38 @@
 | Botão 🔗 também na coluna "Iniciativa" do dashboard admin | Done | Acesso rápido pela tabela |
 | Build Go + tsc + go test | Done | Todos passam |
 | Visual check Playwright (roadmap com botão visível) | Done | Screenshot revisado |
+
+## Sessão 08/06/2026 — Roadmaps por usuário (Fase 1: fundação de dados)
+
+Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · Plano: `docs/superpowers/plans/2026-06-08-roadmaps-fase1-fundacao-dados.md`
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Helper `Slugify` (função pura, TDD) | Done | `internal/slugutil/`; dep `golang.org/x/text` direta |
+| Migração 004 — tabela `roadmaps` + coluna `roadmap_id` (nullable) | Done | DDL aditivo/idempotente; índices `roadmaps_owner_idx`, `roadmap_items_roadmap_idx` |
+| Queries sqlc de roadmaps (uso na Fase 2) | Done | `queries/roadmaps.sql` → List/ListMy/GetByID/Create/Update/Delete |
+| Migração 005 — backfill (DML idempotente) | Done | Garante Eduarda, cria "Roadmap Squad Cloud 2026", move itens; verificado: 0 órfãos |
+| Script de seed dev/preview a partir do backup | Done | `scripts/seed_dev.sh`; psql do PATH ou container `<repo>-db`. Testado: 17 itens do backup → vinculados |
+| Suíte completa do backend | Done | `go test ./...` e `go vet ./...` verdes |
+| ADR 007 (autorização por propriedade) + 008 (auth desacoplada p/ SSO) | Done | Numerados 007/008 (004 e 006 já existiam); spec os chama de 004/005 |
+| Atualizar PRD e TASKS | Done | Modelo de roadmaps por usuário documentado |
+
+> **Nota:** a Fase 1 é puramente aditiva no banco; a aplicação se comporta exatamente como antes (rotas e frontend inalterados — a coluna `roadmap_id` segue nullable até a Fase 2).
+
+### Fase 2 — Backend (pendente)
+- `users`: tornar `password_hash` anulável; adicionar `auth_provider`/`external_id` (migração — usar próximo número livre); ajustar login.
+- Endpoints `/api/roadmaps*` e itens escopados `/api/roadmaps/{id}/items*`.
+- Middleware `RequireRoadmapOwner` (403 a não-donos); leitura aberta.
+- `/api/admin/users*` protegidos por `RequireAdmin`; seed dos 3 admins.
+- Interface `Authenticator` (encaixe Keycloak).
+- `SET NOT NULL` em `roadmap_items.roadmap_id`.
+- Testes Go: slug→criação, propriedade (403), gate de admin.
+
+### Fase 3 — Frontend (pendente)
+- Setup Vitest + Testing Library.
+- "Meus roadmaps" / "Todos os roadmaps"; criar roadmap.
+- Roteamento por ID (`/roadmaps/{id}-{slug}`); modo leitura (flag `can_edit`) e modo edição.
+- Modal de exclusão com confirmação por slug.
+- Painel "Usuários" só para admins.
+- Atualizar `frontend/src/api.ts`; remover chamadas a `/api/items*`.
+- Verificação visual com Playwright.
