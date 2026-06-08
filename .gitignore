@@ -8,3 +8,6 @@ e2e/test-results/
 .env
 .DS_Store
 *.log
+
+# Backups locais do banco de dados (não versionar)
+backups/
