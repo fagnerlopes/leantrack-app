@@ -16,6 +16,26 @@ SET password_hash = EXCLUDED.password_hash,
     name = EXCLUDED.name,
     role = EXCLUDED.role;
 
+-- name: ListUsers :many
+SELECT id, email, name, role, auth_provider, created_at
+FROM users
+ORDER BY name ASC;
+
+-- name: CreateUser :one
+INSERT INTO users (email, password_hash, name, role, auth_provider)
+VALUES ($1, $2, $3, $4, 'local')
+RETURNING id, email, name, role, auth_provider, created_at;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1;
+
+-- name: UpdateUserRole :one
+UPDATE users SET role = $2 WHERE id = $1
+RETURNING id, email, name, role, auth_provider, created_at;
+
+-- name: CountAdmins :one
+SELECT COUNT(*) FROM users WHERE role = 'admin';
+
 -- name: CreateSession :exec
 INSERT INTO sessions (token, user_id, expires_at)
 VALUES ($1, $2, $3);

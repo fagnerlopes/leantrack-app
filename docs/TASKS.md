@@ -63,14 +63,26 @@ Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · Plan
 
 > **Nota:** a Fase 1 é puramente aditiva no banco; a aplicação se comporta exatamente como antes (rotas e frontend inalterados — a coluna `roadmap_id` segue nullable até a Fase 2).
 
-### Fase 2 — Backend (pendente)
-- `users`: tornar `password_hash` anulável; adicionar `auth_provider`/`external_id` (migração — usar próximo número livre); ajustar login.
-- Endpoints `/api/roadmaps*` e itens escopados `/api/roadmaps/{id}/items*`.
-- Middleware `RequireRoadmapOwner` (403 a não-donos); leitura aberta.
-- `/api/admin/users*` protegidos por `RequireAdmin`; seed dos 3 admins.
-- Interface `Authenticator` (encaixe Keycloak).
-- `SET NOT NULL` em `roadmap_items.roadmap_id`.
-- Testes Go: slug→criação, propriedade (403), gate de admin.
+## Sessão 08/06/2026 (Fase 2) — Backend de roadmaps por usuário
+
+Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · ADRs: 007 (propriedade), 008 (auth desacoplada), 009 (rotas legadas em compat)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Migração 006 — `users` SSO-ready + papéis + NOT NULL | Done | `password_hash` anulável; `auth_provider`/`external_id` + índice único parcial; `viewer`→`user` e default `user`; garante 3 admins fixos; `roadmap_items.roadmap_id` SET NOT NULL |
+| Ajuste de login para senha anulável | Done | `GetUserByEmail` agora retorna `password_hash *string`; login rejeita usuário sem senha local |
+| Interface `Authenticator` + `LocalAuthenticator` | Done | `auth.NewMiddleware(Authenticator, require)`; `Middleware` legado mantém a assinatura. Encaixe para `KeycloakAuthenticator` (ADR 008) |
+| Middleware `RequireRoadmapOwner` (403 a não-donos) | Done | Lê `{id}`, carrega roadmap, exige `owner_id == sessão`; leitura não passa pela trava |
+| Endpoints `/api/roadmaps*` (id; `?mine=true`; `can_edit`) | Done | List/Create/Get/Update/Delete; slug regenerado no rename; DELETE exige `confirmSlug` |
+| Itens escopados `/api/roadmaps/{id}/items*` | Done | List/Create/Reorder/Update/Delete; mutação só do dono via `ownerM` |
+| `/api/admin/users*` protegidos por `RequireAdmin` | Done | List/Create/Delete/UpdateRole; trava de "último admin" e auto-remoção |
+| Queries sqlc (users admin, itens por roadmap, count, slug) | Done | `ListUsers/CreateUser/DeleteUser/UpdateUserRole/CountAdmins`, `ListItemsByRoadmap`, `CountItemsByRoadmap`, `GetRoadmapBySlug` |
+| Rotas legadas `/api/items*` em compatibilidade | Done | Apontam para o roadmap institucional (ADR 009); removidas na Fase 3 |
+| Testes Go: validação, gate admin, propriedade 403, slug, confirm_slug | Done | Unitários puros + integração (tx com rollback, guardada por `DATABASE_URL`); `go test ./...` e `go vet ./...` verdes |
+| Verificação visual (Playwright: login, roadmap, admin) | Done | App segue funcional via rotas de compat; 17 itens renderizam |
+
+> **Nota:** o frontend permanece inalterado nesta fase e continua consumindo
+> `/api/items*` (compat). A migração para as rotas escopadas é a Fase 3.
 
 ### Fase 3 — Frontend (pendente)
 - Setup Vitest + Testing Library.

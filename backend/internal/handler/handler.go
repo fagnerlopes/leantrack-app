@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -13,9 +14,21 @@ import (
 	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/auth"
 	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/config"
 	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/database/sqlc"
+	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/slugutil"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// institutionalSlug identifica o roadmap institucional para o qual as rotas
+// legadas /api/items* continuam apontando durante a transição (Fase 2 → 3).
+const institutionalSlug = "roadmap-squad-cloud-2026"
+
+// isUniqueViolation reporta se o erro é uma violação de UNIQUE do Postgres (23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
 
 type Handler struct {
 	Q   *sqlc.Queries
@@ -79,11 +92,36 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/login", h.login)
 	mux.HandleFunc("POST /api/auth/logout", h.logout)
 
-	// Authenticated routes (loose middleware for /me; strict for items)
+	// Authenticated routes
 	authM := auth.Middleware(h.Q, true)
+	ownerM := auth.RequireRoadmapOwner(h.Q)
+	// adminM: autenticado + papel admin.
+	adminM := func(next http.Handler) http.Handler { return authM(auth.RequireAdmin(next)) }
 
 	mux.Handle("GET /api/auth/me", authM(http.HandlerFunc(h.me)))
 
+	// Roadmaps (endereçados por id; leitura aberta a qualquer logado).
+	mux.Handle("GET /api/roadmaps", authM(http.HandlerFunc(h.listRoadmaps)))
+	mux.Handle("POST /api/roadmaps", authM(http.HandlerFunc(h.createRoadmap)))
+	mux.Handle("GET /api/roadmaps/{id}", authM(http.HandlerFunc(h.getRoadmap)))
+	mux.Handle("PUT /api/roadmaps/{id}", authM(ownerM(http.HandlerFunc(h.updateRoadmap))))
+	mux.Handle("DELETE /api/roadmaps/{id}", authM(ownerM(http.HandlerFunc(h.deleteRoadmap))))
+
+	// Itens escopados por roadmap (mutação só do dono; leitura aberta).
+	mux.Handle("GET /api/roadmaps/{id}/items", authM(http.HandlerFunc(h.listRoadmapItems)))
+	mux.Handle("POST /api/roadmaps/{id}/items", authM(ownerM(http.HandlerFunc(h.createRoadmapItem))))
+	mux.Handle("PUT /api/roadmaps/{id}/items/reorder", authM(ownerM(http.HandlerFunc(h.reorderRoadmapItems))))
+	mux.Handle("PUT /api/roadmaps/{id}/items/{itemId}", authM(ownerM(http.HandlerFunc(h.updateRoadmapItem))))
+	mux.Handle("DELETE /api/roadmaps/{id}/items/{itemId}", authM(ownerM(http.HandlerFunc(h.deleteRoadmapItem))))
+
+	// Administração de contas (somente admin).
+	mux.Handle("GET /api/admin/users", adminM(http.HandlerFunc(h.listUsers)))
+	mux.Handle("POST /api/admin/users", adminM(http.HandlerFunc(h.createUser)))
+	mux.Handle("DELETE /api/admin/users/{id}", adminM(http.HandlerFunc(h.deleteUser)))
+	mux.Handle("PUT /api/admin/users/{id}/role", adminM(http.HandlerFunc(h.updateUserRole)))
+
+	// Rotas legadas /api/items* — compatibilidade até a Fase 3 migrar o
+	// frontend. Operam sobre o roadmap institucional; mutação só admin.
 	mux.Handle("GET /api/items", authM(http.HandlerFunc(h.listItems)))
 	mux.Handle("POST /api/items", authM(auth.RequireAdmin(http.HandlerFunc(h.createItem))))
 	mux.Handle("PUT /api/items/reorder", authM(auth.RequireAdmin(http.HandlerFunc(h.reorderItems))))
@@ -119,7 +157,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := h.Q.GetUserByEmail(r.Context(), req.Email)
-	if err != nil || !auth.CheckPassword(u.PasswordHash, req.Password) {
+	if err != nil || u.PasswordHash == nil || !auth.CheckPassword(*u.PasswordHash, req.Password) {
 		writeErr(w, http.StatusUnauthorized, "credenciais inválidas")
 		return
 	}
@@ -150,7 +188,7 @@ func (h *Handler) devLogin(w http.ResponseWriter, r *http.Request) {
 		// create on the fly
 		hash, _ := auth.HashPassword("dev")
 		_ = h.Q.UpsertSeedUser(r.Context(), sqlc.UpsertSeedUserParams{
-			Email: req.Email, PasswordHash: hash, Name: "Dev", Role: "admin",
+			Email: req.Email, PasswordHash: &hash, Name: "Dev", Role: "admin",
 		})
 		u, err = h.Q.GetUserByEmail(r.Context(), req.Email)
 		if err != nil {
@@ -208,14 +246,14 @@ type itemDTO struct {
 }
 
 type rowLike interface {
-	sqlc.RoadmapItem | sqlc.ListItemsRow | sqlc.CreateItemRow | sqlc.UpdateItemRow
+	sqlc.RoadmapItem | sqlc.ListItemsByRoadmapRow | sqlc.CreateItemRow | sqlc.UpdateItemRow
 }
 
 func toDTO[T rowLike](row T) itemDTO {
 	switch it := any(row).(type) {
 	case sqlc.RoadmapItem:
 		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color, EpicUrl: it.EpicUrl}
-	case sqlc.ListItemsRow:
+	case sqlc.ListItemsByRoadmapRow:
 		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color, EpicUrl: it.EpicUrl}
 	case sqlc.CreateItemRow:
 		return itemDTO{ID: it.ID, Title: it.Title, Status: it.Status, StartDate: fmtDate(it.StartDate), EndDate: fmtDate(it.EndDate), Progress: it.Progress, DependencyID: it.DependencyID, Notes: it.Notes, ExtTeam: it.ExtTeam, ExtDescription: it.ExtDescription, ExtMilestone: fmtDate(it.ExtMilestone), SortOrder: it.SortOrder, Color: it.Color, EpicUrl: it.EpicUrl}
@@ -291,8 +329,74 @@ func (req itemReq) validate() error {
 	return nil
 }
 
+// institutionalRoadmapID resolve o id do roadmap institucional, usado pelas
+// rotas legadas /api/items* enquanto o frontend não migra (Fase 3).
+func (h *Handler) institutionalRoadmapID(ctx context.Context) (int64, error) {
+	rm, err := h.Q.GetRoadmapBySlug(ctx, institutionalSlug)
+	if err != nil {
+		return 0, err
+	}
+	return rm.ID, nil
+}
+
+// reorderEntry é usado tanto pelas rotas legadas quanto pelas escopadas.
+type reorderEntry struct {
+	ID        int64 `json:"id"`
+	SortOrder int32 `json:"sortOrder"`
+}
+
+// ── Rotas legadas /api/items* (compatibilidade Fase 2 → 3) ──────
+// Operam sobre o roadmap institucional; mutação restrita a admin (RequireAdmin).
+
 func (h *Handler) listItems(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Q.ListItems(r.Context())
+	rid, err := h.institutionalRoadmapID(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
+		return
+	}
+	h.writeItemsByRoadmap(w, r, rid)
+}
+
+func (h *Handler) createItem(w http.ResponseWriter, r *http.Request) {
+	rid, err := h.institutionalRoadmapID(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
+		return
+	}
+	h.createItemInRoadmap(w, r, rid)
+}
+
+func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
+	rid, err := h.institutionalRoadmapID(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
+		return
+	}
+	h.updateItemInRoadmap(w, r, rid)
+}
+
+func (h *Handler) reorderItems(w http.ResponseWriter, r *http.Request) {
+	rid, err := h.institutionalRoadmapID(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
+		return
+	}
+	h.reorderItemsInRoadmap(w, r, rid)
+}
+
+func (h *Handler) deleteItem(w http.ResponseWriter, r *http.Request) {
+	rid, err := h.institutionalRoadmapID(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "roadmap institucional não encontrado")
+		return
+	}
+	h.deleteItemInRoadmap(w, r, rid)
+}
+
+// ── Itens escopados por roadmap (handlers compartilhados) ───────
+
+func (h *Handler) writeItemsByRoadmap(w http.ResponseWriter, r *http.Request, roadmapID int64) {
+	items, err := h.Q.ListItemsByRoadmap(r.Context(), roadmapID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "erro ao listar")
 		return
@@ -304,7 +408,7 @@ func (h *Handler) listItems(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (h *Handler) createItem(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createItemInRoadmap(w http.ResponseWriter, r *http.Request, roadmapID int64) {
 	var req itemReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "json inválido")
@@ -330,7 +434,7 @@ func (h *Handler) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	it, err := h.Q.CreateItem(r.Context(), sqlc.CreateItemParams{
-		Title: req.Title, Status: req.Status,
+		RoadmapID: roadmapID, Title: req.Title, Status: req.Status,
 		StartDate: sd, EndDate: ed, Progress: req.Progress,
 		DependencyID: req.DependencyID, Notes: req.Notes,
 		ExtTeam: req.ExtTeam, ExtDescription: req.ExtDescription,
@@ -346,7 +450,7 @@ func (h *Handler) createItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toDTO(it))
 }
 
-func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) updateItemInRoadmap(w http.ResponseWriter, r *http.Request, roadmapID int64) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "id inválido")
@@ -365,7 +469,7 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	ed, _ := parseDate(req.EndDate)
 	em, _ := parseDate(req.ExtMilestone)
 	it, err := h.Q.UpdateItem(r.Context(), sqlc.UpdateItemParams{
-		ID: id, Title: req.Title, Status: req.Status,
+		ID: id, RoadmapID: roadmapID, Title: req.Title, Status: req.Status,
 		StartDate: sd, EndDate: ed, Progress: req.Progress,
 		DependencyID: req.DependencyID, Notes: req.Notes,
 		ExtTeam: req.ExtTeam, ExtDescription: req.ExtDescription,
@@ -385,12 +489,7 @@ func (h *Handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toDTO(it))
 }
 
-type reorderEntry struct {
-	ID        int64 `json:"id"`
-	SortOrder int32 `json:"sortOrder"`
-}
-
-func (h *Handler) reorderItems(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) reorderItemsInRoadmap(w http.ResponseWriter, r *http.Request, roadmapID int64) {
 	var req []reorderEntry
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "json inválido")
@@ -406,7 +505,7 @@ func (h *Handler) reorderItems(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, e := range req {
 		if err := h.Q.UpdateSortOrder(r.Context(), sqlc.UpdateSortOrderParams{
-			ID: e.ID, SortOrder: e.SortOrder,
+			ID: e.ID, RoadmapID: roadmapID, SortOrder: e.SortOrder,
 		}); err != nil {
 			slog.Error("reorder", "id", e.ID, "err", err)
 			writeErr(w, http.StatusInternalServerError, "erro ao reordenar")
@@ -416,15 +515,494 @@ func (h *Handler) reorderItems(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) deleteItem(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteItemInRoadmap(w http.ResponseWriter, r *http.Request, roadmapID int64) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "id inválido")
 		return
 	}
-	if err := h.Q.DeleteItem(r.Context(), id); err != nil {
+	if err := h.Q.DeleteItem(r.Context(), sqlc.DeleteItemParams{ID: id, RoadmapID: roadmapID}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "erro ao remover")
 		return
 	}
 	writeJSON(w, http.StatusNoContent, nil)
+}
+
+// ── Rotas escopadas /api/roadmaps/{id}/items* ───────────────────
+// roadmapIDFromPath lê e valida o {id} do roadmap na rota.
+
+func roadmapIDFromPath(r *http.Request) (int64, error) {
+	return strconv.ParseInt(r.PathValue("id"), 10, 64)
+}
+
+func (h *Handler) listRoadmapItems(w http.ResponseWriter, r *http.Request) {
+	rid, err := roadmapIDFromPath(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	h.writeItemsByRoadmap(w, r, rid)
+}
+
+func (h *Handler) createRoadmapItem(w http.ResponseWriter, r *http.Request) {
+	rid, err := roadmapIDFromPath(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	h.createItemInRoadmap(w, r, rid)
+}
+
+func (h *Handler) updateRoadmapItem(w http.ResponseWriter, r *http.Request) {
+	rid, err := roadmapIDFromPath(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	h.updateItemInRoadmapByItemID(w, r, rid)
+}
+
+func (h *Handler) deleteRoadmapItem(w http.ResponseWriter, r *http.Request) {
+	rid, err := roadmapIDFromPath(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	h.deleteItemInRoadmapByItemID(w, r, rid)
+}
+
+func (h *Handler) reorderRoadmapItems(w http.ResponseWriter, r *http.Request) {
+	rid, err := roadmapIDFromPath(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	h.reorderItemsInRoadmap(w, r, rid)
+}
+
+// As variantes escopadas usam {itemId} (e não {id}, que é o roadmap).
+func (h *Handler) updateItemInRoadmapByItemID(w http.ResponseWriter, r *http.Request, roadmapID int64) {
+	id, err := strconv.ParseInt(r.PathValue("itemId"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id do item inválido")
+		return
+	}
+	var req itemReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if err := req.validate(); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	sd, _ := parseDate(req.StartDate)
+	ed, _ := parseDate(req.EndDate)
+	em, _ := parseDate(req.ExtMilestone)
+	it, err := h.Q.UpdateItem(r.Context(), sqlc.UpdateItemParams{
+		ID: id, RoadmapID: roadmapID, Title: req.Title, Status: req.Status,
+		StartDate: sd, EndDate: ed, Progress: req.Progress,
+		DependencyID: req.DependencyID, Notes: req.Notes,
+		ExtTeam: req.ExtTeam, ExtDescription: req.ExtDescription,
+		ExtMilestone: em, SortOrder: req.SortOrder,
+		Color:   sanitizeColor(req.Color),
+		EpicUrl: sanitizeEpicUrl(req.EpicUrl),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "não encontrado")
+		return
+	}
+	if err != nil {
+		slog.Error("update item", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao atualizar")
+		return
+	}
+	writeJSON(w, http.StatusOK, toDTO(it))
+}
+
+func (h *Handler) deleteItemInRoadmapByItemID(w http.ResponseWriter, r *http.Request, roadmapID int64) {
+	id, err := strconv.ParseInt(r.PathValue("itemId"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id do item inválido")
+		return
+	}
+	if err := h.Q.DeleteItem(r.Context(), sqlc.DeleteItemParams{ID: id, RoadmapID: roadmapID}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao remover")
+		return
+	}
+	writeJSON(w, http.StatusNoContent, nil)
+}
+
+// ──────────────────────────────────────────────────────────────
+// Roadmaps
+// ──────────────────────────────────────────────────────────────
+
+type roadmapDTO struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	OwnerID     int64  `json:"ownerId"`
+	OwnerName   string `json:"ownerName"`
+	ItemCount   int64  `json:"itemCount"`
+	CanEdit     bool   `json:"canEdit"`
+}
+
+type roadmapReq struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+func validateRoadmapName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", errors.New("nome obrigatório")
+	}
+	if len(name) > 200 {
+		return "", errors.New("nome muito longo (máx. 200)")
+	}
+	if slugutil.Slugify(name) == "" {
+		return "", errors.New("nome inválido")
+	}
+	return name, nil
+}
+
+func (h *Handler) listRoadmaps(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	if u == nil {
+		writeErr(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
+	out := make([]roadmapDTO, 0)
+	if r.URL.Query().Get("mine") == "true" {
+		rows, err := h.Q.ListMyRoadmaps(r.Context(), u.ID)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "erro ao listar")
+			return
+		}
+		for _, rm := range rows {
+			out = append(out, roadmapDTO{
+				ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
+				OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, ItemCount: rm.ItemCount,
+				CanEdit: rm.OwnerID == u.ID,
+			})
+		}
+	} else {
+		rows, err := h.Q.ListRoadmaps(r.Context())
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "erro ao listar")
+			return
+		}
+		for _, rm := range rows {
+			out = append(out, roadmapDTO{
+				ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
+				OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, ItemCount: rm.ItemCount,
+				CanEdit: rm.OwnerID == u.ID,
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) createRoadmap(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	if u == nil {
+		writeErr(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
+	var req roadmapReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	name, err := validateRoadmapName(req.Name)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	rm, err := h.Q.CreateRoadmap(r.Context(), sqlc.CreateRoadmapParams{
+		OwnerID: u.ID, Name: name, Slug: slugutil.Slugify(name),
+		Description: strings.TrimSpace(req.Description),
+	})
+	if isUniqueViolation(err) {
+		writeErr(w, http.StatusConflict, "você já tem um roadmap com esse nome")
+		return
+	}
+	if err != nil {
+		slog.Error("create roadmap", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao criar")
+		return
+	}
+	writeJSON(w, http.StatusCreated, roadmapDTO{
+		ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
+		OwnerID: rm.OwnerID, OwnerName: u.Name, ItemCount: 0, CanEdit: true,
+	})
+}
+
+func (h *Handler) getRoadmap(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	if u == nil {
+		writeErr(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	rm, err := h.Q.GetRoadmapByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "roadmap não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar")
+		return
+	}
+	ownerName := u.Name
+	if rm.OwnerID != u.ID {
+		if owner, err := h.Q.GetUserByID(r.Context(), rm.OwnerID); err == nil {
+			ownerName = owner.Name
+		}
+	}
+	count, _ := h.Q.CountItemsByRoadmap(r.Context(), id)
+	writeJSON(w, http.StatusOK, roadmapDTO{
+		ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
+		OwnerID: rm.OwnerID, OwnerName: ownerName, ItemCount: count,
+		CanEdit: rm.OwnerID == u.ID,
+	})
+}
+
+func (h *Handler) updateRoadmap(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var req roadmapReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	name, err := validateRoadmapName(req.Name)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	rm, err := h.Q.UpdateRoadmap(r.Context(), sqlc.UpdateRoadmapParams{
+		ID: id, Name: name, Slug: slugutil.Slugify(name),
+		Description: strings.TrimSpace(req.Description),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "roadmap não encontrado")
+		return
+	}
+	if isUniqueViolation(err) {
+		writeErr(w, http.StatusConflict, "você já tem um roadmap com esse nome")
+		return
+	}
+	if err != nil {
+		slog.Error("update roadmap", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao atualizar")
+		return
+	}
+	count, _ := h.Q.CountItemsByRoadmap(r.Context(), id)
+	writeJSON(w, http.StatusOK, roadmapDTO{
+		ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
+		OwnerID: rm.OwnerID, OwnerName: u.Name, ItemCount: count, CanEdit: true,
+	})
+}
+
+type deleteRoadmapReq struct {
+	ConfirmSlug string `json:"confirmSlug"`
+}
+
+func (h *Handler) deleteRoadmap(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var req deleteRoadmapReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	rm, err := h.Q.GetRoadmapByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "roadmap não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar")
+		return
+	}
+	if strings.TrimSpace(req.ConfirmSlug) != rm.Slug {
+		writeErr(w, http.StatusBadRequest, "confirmação não confere com o slug do roadmap")
+		return
+	}
+	if err := h.Q.DeleteRoadmap(r.Context(), id); err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao remover")
+		return
+	}
+	writeJSON(w, http.StatusNoContent, nil)
+}
+
+// ──────────────────────────────────────────────────────────────
+// Administração de contas (RequireAdmin)
+// ──────────────────────────────────────────────────────────────
+
+type userDTO struct {
+	ID           int64  `json:"id"`
+	Email        string `json:"email"`
+	Name         string `json:"name"`
+	Role         string `json:"role"`
+	AuthProvider string `json:"authProvider"`
+}
+
+var validRoles = map[string]bool{"user": true, "admin": true}
+
+func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.Q.ListUsers(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao listar")
+		return
+	}
+	out := make([]userDTO, 0, len(rows))
+	for _, u := range rows {
+		out = append(out, userDTO{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, AuthProvider: u.AuthProvider})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type createUserReq struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+}
+
+func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) {
+	var req createUserReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" || req.Email == "" {
+		writeErr(w, http.StatusBadRequest, "nome e e-mail obrigatórios")
+		return
+	}
+	if !strings.Contains(req.Email, "@") {
+		writeErr(w, http.StatusBadRequest, "e-mail inválido")
+		return
+	}
+	if len(req.Password) < 6 {
+		writeErr(w, http.StatusBadRequest, "senha deve ter ao menos 6 caracteres")
+		return
+	}
+	if req.Role == "" {
+		req.Role = "user"
+	}
+	if !validRoles[req.Role] {
+		writeErr(w, http.StatusBadRequest, "papel inválido")
+		return
+	}
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao processar senha")
+		return
+	}
+	u, err := h.Q.CreateUser(r.Context(), sqlc.CreateUserParams{
+		Email: req.Email, PasswordHash: &hash, Name: req.Name, Role: req.Role,
+	})
+	if isUniqueViolation(err) {
+		writeErr(w, http.StatusConflict, "já existe um usuário com esse e-mail")
+		return
+	}
+	if err != nil {
+		slog.Error("create user", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao criar")
+		return
+	}
+	writeJSON(w, http.StatusCreated, userDTO{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, AuthProvider: u.AuthProvider})
+}
+
+func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
+	me := auth.FromContext(r.Context())
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	if me != nil && me.ID == id {
+		writeErr(w, http.StatusBadRequest, "não é possível remover a própria conta")
+		return
+	}
+	target, err := h.Q.GetUserByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "usuário não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar")
+		return
+	}
+	if target.Role == "admin" {
+		if n, err := h.Q.CountAdmins(r.Context()); err == nil && n <= 1 {
+			writeErr(w, http.StatusBadRequest, "não é possível remover o último admin")
+			return
+		}
+	}
+	if err := h.Q.DeleteUser(r.Context(), id); err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao remover")
+		return
+	}
+	writeJSON(w, http.StatusNoContent, nil)
+}
+
+type updateRoleReq struct {
+	Role string `json:"role"`
+}
+
+func (h *Handler) updateUserRole(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var req updateRoleReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if !validRoles[req.Role] {
+		writeErr(w, http.StatusBadRequest, "papel inválido")
+		return
+	}
+	target, err := h.Q.GetUserByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "usuário não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar")
+		return
+	}
+	// Impede rebaixar o último admin.
+	if target.Role == "admin" && req.Role != "admin" {
+		if n, err := h.Q.CountAdmins(r.Context()); err == nil && n <= 1 {
+			writeErr(w, http.StatusBadRequest, "não é possível rebaixar o último admin")
+			return
+		}
+	}
+	u, err := h.Q.UpdateUserRole(r.Context(), sqlc.UpdateUserRoleParams{ID: id, Role: req.Role})
+	if err != nil {
+		slog.Error("update role", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao atualizar")
+		return
+	}
+	writeJSON(w, http.StatusOK, userDTO{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, AuthProvider: u.AuthProvider})
 }

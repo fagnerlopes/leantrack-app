@@ -1,6 +1,6 @@
 # 008 - Autenticação desacoplada (preparação para SSO/Keycloak)
 
-**Status:** Accepted
+**Status:** Accepted — interface e modelo de dados implementados na Fase 2 (migração 006; `auth.Authenticator` + `auth.LocalAuthenticator`).
 
 > Nota de numeração: o spec/plano referem-se a este ADR como "005"; ver a nota no
 > ADR 007. Conteúdo conforme seções 3.3 e 6 do spec

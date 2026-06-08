@@ -22,17 +22,29 @@ func (q *Queries) CountItems(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countItemsByRoadmap = `-- name: CountItemsByRoadmap :one
+SELECT COUNT(*) FROM roadmap_items WHERE roadmap_id = $1
+`
+
+func (q *Queries) CountItemsByRoadmap(ctx context.Context, roadmapID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countItemsByRoadmap, roadmapID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createItem = `-- name: CreateItem :one
 INSERT INTO roadmap_items (
-    title, status, start_date, end_date, progress, dependency_id, notes,
-    ext_team, ext_description, ext_milestone, sort_order, color, epic_url
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    roadmap_id, title, status, start_date, end_date, progress, dependency_id,
+    notes, ext_team, ext_description, ext_milestone, sort_order, color, epic_url
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 RETURNING id, title, status, start_date, end_date, progress, dependency_id,
           notes, ext_team, ext_description, ext_milestone, sort_order, color,
           epic_url, created_at, updated_at
 `
 
 type CreateItemParams struct {
+	RoadmapID      int64       `json:"roadmap_id"`
 	Title          string      `json:"title"`
 	Status         string      `json:"status"`
 	StartDate      pgtype.Date `json:"start_date"`
@@ -69,6 +81,7 @@ type CreateItemRow struct {
 
 func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (CreateItemRow, error) {
 	row := q.db.QueryRow(ctx, createItem,
+		arg.RoadmapID,
 		arg.Title,
 		arg.Status,
 		arg.StartDate,
@@ -106,74 +119,29 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (CreateI
 }
 
 const deleteItem = `-- name: DeleteItem :exec
-DELETE FROM roadmap_items WHERE id = $1
+DELETE FROM roadmap_items WHERE id = $1 AND roadmap_id = $2
 `
 
-func (q *Queries) DeleteItem(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteItem, id)
+type DeleteItemParams struct {
+	ID        int64 `json:"id"`
+	RoadmapID int64 `json:"roadmap_id"`
+}
+
+func (q *Queries) DeleteItem(ctx context.Context, arg DeleteItemParams) error {
+	_, err := q.db.Exec(ctx, deleteItem, arg.ID, arg.RoadmapID)
 	return err
 }
 
-const getItem = `-- name: GetItem :one
+const listItemsByRoadmap = `-- name: ListItemsByRoadmap :many
 SELECT id, title, status, start_date, end_date, progress, dependency_id,
        notes, ext_team, ext_description, ext_milestone, sort_order, color,
        epic_url, created_at, updated_at
 FROM roadmap_items
-WHERE id = $1
-`
-
-type GetItemRow struct {
-	ID             int64              `json:"id"`
-	Title          string             `json:"title"`
-	Status         string             `json:"status"`
-	StartDate      pgtype.Date        `json:"start_date"`
-	EndDate        pgtype.Date        `json:"end_date"`
-	Progress       int32              `json:"progress"`
-	DependencyID   *int64             `json:"dependency_id"`
-	Notes          string             `json:"notes"`
-	ExtTeam        *string            `json:"ext_team"`
-	ExtDescription *string            `json:"ext_description"`
-	ExtMilestone   pgtype.Date        `json:"ext_milestone"`
-	SortOrder      int32              `json:"sort_order"`
-	Color          *string            `json:"color"`
-	EpicUrl        *string            `json:"epic_url"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) GetItem(ctx context.Context, id int64) (GetItemRow, error) {
-	row := q.db.QueryRow(ctx, getItem, id)
-	var i GetItemRow
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.Status,
-		&i.StartDate,
-		&i.EndDate,
-		&i.Progress,
-		&i.DependencyID,
-		&i.Notes,
-		&i.ExtTeam,
-		&i.ExtDescription,
-		&i.ExtMilestone,
-		&i.SortOrder,
-		&i.Color,
-		&i.EpicUrl,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const listItems = `-- name: ListItems :many
-SELECT id, title, status, start_date, end_date, progress, dependency_id,
-       notes, ext_team, ext_description, ext_milestone, sort_order, color,
-       epic_url, created_at, updated_at
-FROM roadmap_items
+WHERE roadmap_id = $1
 ORDER BY sort_order ASC, id ASC
 `
 
-type ListItemsRow struct {
+type ListItemsByRoadmapRow struct {
 	ID             int64              `json:"id"`
 	Title          string             `json:"title"`
 	Status         string             `json:"status"`
@@ -192,15 +160,15 @@ type ListItemsRow struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
-func (q *Queries) ListItems(ctx context.Context) ([]ListItemsRow, error) {
-	rows, err := q.db.Query(ctx, listItems)
+func (q *Queries) ListItemsByRoadmap(ctx context.Context, roadmapID int64) ([]ListItemsByRoadmapRow, error) {
+	rows, err := q.db.Query(ctx, listItemsByRoadmap, roadmapID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListItemsRow
+	var items []ListItemsByRoadmapRow
 	for rows.Next() {
-		var i ListItemsRow
+		var i ListItemsByRoadmapRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -231,21 +199,21 @@ func (q *Queries) ListItems(ctx context.Context) ([]ListItemsRow, error) {
 
 const updateItem = `-- name: UpdateItem :one
 UPDATE roadmap_items SET
-    title = $2,
-    status = $3,
-    start_date = $4,
-    end_date = $5,
-    progress = $6,
-    dependency_id = $7,
-    notes = $8,
-    ext_team = $9,
-    ext_description = $10,
-    ext_milestone = $11,
-    sort_order = $12,
-    color = $13,
-    epic_url = $14,
+    title = $3,
+    status = $4,
+    start_date = $5,
+    end_date = $6,
+    progress = $7,
+    dependency_id = $8,
+    notes = $9,
+    ext_team = $10,
+    ext_description = $11,
+    ext_milestone = $12,
+    sort_order = $13,
+    color = $14,
+    epic_url = $15,
     updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND roadmap_id = $2
 RETURNING id, title, status, start_date, end_date, progress, dependency_id,
           notes, ext_team, ext_description, ext_milestone, sort_order, color,
           epic_url, created_at, updated_at
@@ -253,6 +221,7 @@ RETURNING id, title, status, start_date, end_date, progress, dependency_id,
 
 type UpdateItemParams struct {
 	ID             int64       `json:"id"`
+	RoadmapID      int64       `json:"roadmap_id"`
 	Title          string      `json:"title"`
 	Status         string      `json:"status"`
 	StartDate      pgtype.Date `json:"start_date"`
@@ -290,6 +259,7 @@ type UpdateItemRow struct {
 func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (UpdateItemRow, error) {
 	row := q.db.QueryRow(ctx, updateItem,
 		arg.ID,
+		arg.RoadmapID,
 		arg.Title,
 		arg.Status,
 		arg.StartDate,
@@ -327,15 +297,17 @@ func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (UpdateI
 }
 
 const updateSortOrder = `-- name: UpdateSortOrder :exec
-UPDATE roadmap_items SET sort_order = $2, updated_at = now() WHERE id = $1
+UPDATE roadmap_items SET sort_order = $3, updated_at = now()
+WHERE id = $1 AND roadmap_id = $2
 `
 
 type UpdateSortOrderParams struct {
 	ID        int64 `json:"id"`
+	RoadmapID int64 `json:"roadmap_id"`
 	SortOrder int32 `json:"sort_order"`
 }
 
 func (q *Queries) UpdateSortOrder(ctx context.Context, arg UpdateSortOrderParams) error {
-	_, err := q.db.Exec(ctx, updateSortOrder, arg.ID, arg.SortOrder)
+	_, err := q.db.Exec(ctx, updateSortOrder, arg.ID, arg.RoadmapID, arg.SortOrder)
 	return err
 }

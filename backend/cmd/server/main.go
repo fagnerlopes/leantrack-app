@@ -64,7 +64,7 @@ func main() {
 	}
 	if err := q.UpsertSeedUser(ctx, sqlc.UpsertSeedUserParams{
 		Email:        cfg.SeedAdminEmail,
-		PasswordHash: hash,
+		PasswordHash: &hash,
 		Name:         "Administrador",
 		Role:         "admin",
 	}); err != nil {

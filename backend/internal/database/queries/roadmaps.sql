@@ -20,6 +20,11 @@ SELECT id, owner_id, name, slug, description, created_at, updated_at
 FROM roadmaps
 WHERE id = $1;
 
+-- name: GetRoadmapBySlug :one
+SELECT id, owner_id, name, slug, description, created_at, updated_at
+FROM roadmaps
+WHERE slug = $1;
+
 -- name: CreateRoadmap :one
 INSERT INTO roadmaps (owner_id, name, slug, description)
 VALUES ($1, $2, $3, $4)

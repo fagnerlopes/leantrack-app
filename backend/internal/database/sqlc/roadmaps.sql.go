@@ -74,6 +74,27 @@ func (q *Queries) GetRoadmapByID(ctx context.Context, id int64) (Roadmap, error)
 	return i, err
 }
 
+const getRoadmapBySlug = `-- name: GetRoadmapBySlug :one
+SELECT id, owner_id, name, slug, description, created_at, updated_at
+FROM roadmaps
+WHERE slug = $1
+`
+
+func (q *Queries) GetRoadmapBySlug(ctx context.Context, slug string) (Roadmap, error) {
+	row := q.db.QueryRow(ctx, getRoadmapBySlug, slug)
+	var i Roadmap
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listMyRoadmaps = `-- name: ListMyRoadmaps :many
 SELECT r.id, r.owner_id, r.name, r.slug, r.description, r.created_at, r.updated_at,
        u.name AS owner_name,

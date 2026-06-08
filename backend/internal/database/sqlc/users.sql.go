@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAdmins = `-- name: CountAdmins :one
+SELECT COUNT(*) FROM users WHERE role = 'admin'
+`
+
+func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (token, user_id, expires_at)
 VALUES ($1, $2, $3)
@@ -25,6 +36,47 @@ type CreateSessionParams struct {
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
 	_, err := q.db.Exec(ctx, createSession, arg.Token, arg.UserID, arg.ExpiresAt)
 	return err
+}
+
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (email, password_hash, name, role, auth_provider)
+VALUES ($1, $2, $3, $4, 'local')
+RETURNING id, email, name, role, auth_provider, created_at
+`
+
+type CreateUserParams struct {
+	Email        string  `json:"email"`
+	PasswordHash *string `json:"password_hash"`
+	Name         string  `json:"name"`
+	Role         string  `json:"role"`
+}
+
+type CreateUserRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	AuthProvider string             `json:"auth_provider"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Name,
+		arg.Role,
+	)
+	var i CreateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.AuthProvider,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
@@ -42,6 +94,15 @@ DELETE FROM sessions WHERE token = $1
 
 func (q *Queries) DeleteSession(ctx context.Context, token string) error {
 	_, err := q.db.Exec(ctx, deleteSession, token)
+	return err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
 }
 
@@ -81,9 +142,18 @@ FROM users
 WHERE email = $1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+type GetUserByEmailRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash *string            `json:"password_hash"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -101,15 +171,99 @@ FROM users
 WHERE id = $1
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+type GetUserByIDRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash *string            `json:"password_hash"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
-	var i User
+	var i GetUserByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
 		&i.Name,
 		&i.Role,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, email, name, role, auth_provider, created_at
+FROM users
+ORDER BY name ASC
+`
+
+type ListUsersRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	AuthProvider string             `json:"auth_provider"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
+	rows, err := q.db.Query(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersRow
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Role,
+			&i.AuthProvider,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateUserRole = `-- name: UpdateUserRole :one
+UPDATE users SET role = $2 WHERE id = $1
+RETURNING id, email, name, role, auth_provider, created_at
+`
+
+type UpdateUserRoleParams struct {
+	ID   int64  `json:"id"`
+	Role string `json:"role"`
+}
+
+type UpdateUserRoleRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	AuthProvider string             `json:"auth_provider"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (UpdateUserRoleRow, error) {
+	row := q.db.QueryRow(ctx, updateUserRole, arg.ID, arg.Role)
+	var i UpdateUserRoleRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.AuthProvider,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -125,10 +279,10 @@ SET password_hash = EXCLUDED.password_hash,
 `
 
 type UpsertSeedUserParams struct {
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
-	Name         string `json:"name"`
-	Role         string `json:"role"`
+	Email        string  `json:"email"`
+	PasswordHash *string `json:"password_hash"`
+	Name         string  `json:"name"`
+	Role         string  `json:"role"`
 }
 
 func (q *Queries) UpsertSeedUser(ctx context.Context, arg UpsertSeedUserParams) error {

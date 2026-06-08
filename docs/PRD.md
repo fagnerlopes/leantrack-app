@@ -7,7 +7,7 @@ Aplicação web interna que apresenta roadmaps de iniciativas em formato Gantt, 
 A aplicação está evoluindo de **um único roadmap compartilhado** para **vários roadmaps, cada um com um dono** — permitindo que diferentes setores da empresa usem a ferramenta. Esta evolução é faseada (ver `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md`):
 
 - **Fase 1 (concluída):** fundação de dados — tabela `roadmaps`, vínculo `roadmap_items.roadmap_id`, e migração dos dados atuais para o roadmap institucional **"Roadmap Squad Cloud 2026"** (dono: Eduarda Moraes). Sem mudança visível na aplicação.
-- **Fase 2 (pendente):** backend — endpoints por roadmap, autorização por propriedade, gestão de contas por admin, autenticação desacoplada (preparação SSO).
+- **Fase 2 (concluída):** backend — endpoints por roadmap (`/api/roadmaps*`) e itens escopados (`/api/roadmaps/{id}/items*`), autorização por propriedade (`RequireRoadmapOwner`), gestão de contas por admin (`/api/admin/users*`), autenticação desacoplada (interface `Authenticator` — preparação SSO), `roadmap_id` agora obrigatório. As rotas legadas `/api/items*` seguem ativas em compatibilidade até a Fase 3 (ver ADR 009); o frontend ainda não mudou.
 - **Fase 3 (pendente):** frontend — telas "Meus roadmaps" / "Todos os roadmaps", modo leitura para não-donos, criação/exclusão de roadmaps, painel de usuários.
 
 ### Modelo de propriedade (alvo das Fases 2–3)

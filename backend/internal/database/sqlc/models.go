@@ -35,7 +35,7 @@ type RoadmapItem struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	Color          *string            `json:"color"`
 	EpicUrl        *string            `json:"epic_url"`
-	RoadmapID      *int64             `json:"roadmap_id"`
+	RoadmapID      int64              `json:"roadmap_id"`
 }
 
 type Session struct {
@@ -48,8 +48,10 @@ type Session struct {
 type User struct {
 	ID           int64              `json:"id"`
 	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
+	PasswordHash *string            `json:"password_hash"`
 	Name         string             `json:"name"`
 	Role         string             `json:"role"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	AuthProvider string             `json:"auth_provider"`
+	ExternalID   *string            `json:"external_id"`
 }

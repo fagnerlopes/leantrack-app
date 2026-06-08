@@ -51,6 +51,44 @@ func TestParseDate(t *testing.T) {
 	}
 }
 
+func TestValidateRoadmapName(t *testing.T) {
+	cases := []struct {
+		name    string
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"simples", "Roadmap VPS 2026", "Roadmap VPS 2026", false},
+		{"apara espaços", "  Roadmap VPS  ", "Roadmap VPS", false},
+		{"vazio", "   ", "", true},
+		{"só símbolos (slug vazio)", "!@#$%", "", true},
+		{"acentos ok", "Roadmap Cloud Ediç", "Roadmap Cloud Ediç", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := validateRoadmapName(c.in)
+			if c.wantErr && err == nil {
+				t.Fatalf("esperava erro, veio nil")
+			}
+			if !c.wantErr && err != nil {
+				t.Fatalf("erro inesperado: %v", err)
+			}
+			if !c.wantErr && got != c.want {
+				t.Fatalf("got %q want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestValidRoles(t *testing.T) {
+	if !validRoles["user"] || !validRoles["admin"] {
+		t.Fatal("user e admin devem ser papéis válidos")
+	}
+	if validRoles["viewer"] || validRoles[""] || validRoles["root"] {
+		t.Fatal("apenas user e admin devem ser válidos")
+	}
+}
+
 func TestSanitizeColor(t *testing.T) {
 	str := func(s string) *string { return &s }
 	cases := []struct {

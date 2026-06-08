@@ -1,6 +1,6 @@
 # 007 - Autorização por propriedade (ownership) no nível da aplicação
 
-**Status:** Accepted
+**Status:** Accepted — implementado na Fase 2 via middleware `auth.RequireRoadmapOwner`.
 
 > Nota de numeração: o spec/plano referem-se a este ADR como "004"; os números
 > 004 e 006 já estavam em uso no repositório, então este foi registrado como 007

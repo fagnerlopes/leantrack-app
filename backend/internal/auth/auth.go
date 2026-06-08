@@ -4,13 +4,19 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/database/sqlc"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// ErrNoSession indica que a requisição não traz uma sessão válida.
+var ErrNoSession = errors.New("no session")
 
 const (
 	CookieName     = "session"
@@ -94,20 +100,43 @@ func FromContext(ctx context.Context) *SessionUser {
 	return nil
 }
 
-// Middleware: loads session from cookie and injects user in context.
-// If `require` is true, returns 401 when no valid session.
-func Middleware(q *sqlc.Queries, require bool) func(http.Handler) http.Handler {
+// Authenticator resolve o usuário logado a partir da requisição. Hoje a
+// implementação lê o cookie de sessão local; amanhã, um KeycloakAuthenticator
+// poderá validar um token OIDC sem que o restante do sistema mude (ver ADR 008).
+type Authenticator interface {
+	UserFromRequest(r *http.Request) (*SessionUser, error)
+}
+
+// LocalAuthenticator resolve a sessão pela tabela `sessions` (cookie HttpOnly).
+type LocalAuthenticator struct {
+	Q *sqlc.Queries
+}
+
+func NewLocalAuthenticator(q *sqlc.Queries) LocalAuthenticator {
+	return LocalAuthenticator{Q: q}
+}
+
+func (a LocalAuthenticator) UserFromRequest(r *http.Request) (*SessionUser, error) {
+	c, err := r.Cookie(CookieName)
+	if err != nil || c.Value == "" {
+		return nil, ErrNoSession
+	}
+	row, err := a.Q.GetSession(r.Context(), c.Value)
+	if err != nil {
+		return nil, ErrNoSession
+	}
+	return &SessionUser{ID: row.UserID, Email: row.Email, Name: row.Name, Role: row.Role}, nil
+}
+
+// NewMiddleware injeta o usuário resolvido pelo Authenticator no contexto.
+// Se `require` é true, responde 401 quando não há sessão válida.
+func NewMiddleware(a Authenticator, require bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			c, err := r.Cookie(CookieName)
-			if err == nil && c.Value != "" {
-				row, err := q.GetSession(r.Context(), c.Value)
-				if err == nil {
-					u := &SessionUser{ID: row.UserID, Email: row.Email, Name: row.Name, Role: row.Role}
-					ctx := WithUser(r.Context(), u)
-					next.ServeHTTP(w, r.WithContext(ctx))
-					return
-				}
+			if u, err := a.UserFromRequest(r); err == nil && u != nil {
+				ctx := WithUser(r.Context(), u)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
 			}
 			if require {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -116,6 +145,11 @@ func Middleware(q *sqlc.Queries, require bool) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// Middleware mantém a assinatura legada usando o autenticador local.
+func Middleware(q *sqlc.Queries, require bool) func(http.Handler) http.Handler {
+	return NewMiddleware(NewLocalAuthenticator(q), require)
 }
 
 // RequireAdmin wraps a handler to enforce role == "admin".
@@ -128,4 +162,39 @@ func RequireAdmin(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RequireRoadmapOwner exige que o usuário logado seja o dono do roadmap
+// identificado pelo path value {id}. Leitura não passa por aqui; apenas
+// mutações (editar/apagar/reordenar). Responde 403 a não-donos, 404 se o
+// roadmap não existe, 400 se o id é inválido.
+func RequireRoadmapOwner(q *sqlc.Queries) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u := FromContext(r.Context())
+			if u == nil {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+			if err != nil {
+				http.Error(w, `{"error":"id inválido"}`, http.StatusBadRequest)
+				return
+			}
+			rm, err := q.GetRoadmapByID(r.Context(), id)
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, `{"error":"roadmap não encontrado"}`, http.StatusNotFound)
+				return
+			}
+			if err != nil {
+				http.Error(w, `{"error":"erro ao carregar roadmap"}`, http.StatusInternalServerError)
+				return
+			}
+			if rm.OwnerID != u.ID {
+				http.Error(w, `{"error":"apenas o dono pode editar este roadmap"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
