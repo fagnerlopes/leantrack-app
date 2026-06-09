@@ -71,7 +71,7 @@ function GanttBar({ item }: { item: Item }) {
     <div style={{ position: "relative", height: 38 }}>
       <div style={{
         position: "absolute", left: `${left}%`, width: `${width}%`,
-        top: 4, height: 22, background: barColor, borderRadius: 6,
+        top: 0, height: "100%", background: barColor, borderRadius: 6,
         opacity: item.status === "nao-iniciado" ? 0.72 : 0.9,
         border: isCritico ? `2px dashed #991b1b` : isAlerta ? `2px dashed #92400e` : "none",
         overflow: "hidden", minWidth: 8,
