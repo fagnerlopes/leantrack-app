@@ -107,3 +107,16 @@ Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · ADRs
 
 | Senha inicial para admins fixos (acesso ao ambiente publicado) | Done | `SetInitialAdminPasswords` no startup preenche `password_hash` dos admins sem senha local (fagner/marcus/eduarda) com o segredo `SEED_ADMIN_PASSWORD`; idempotente; teste de integração `TestSetInitialAdminPasswords`. Ver nota no ADR 008 |
 | Cache-Control correto para SPA (evita app antigo após deploy) | Done | `index.html` servido com `no-cache` (sempre revalida); assets hasheados em `/assets/*` com `public, max-age=31536000, immutable`. Sintoma corrigido: navegador servia o frontend da Fase 2 em cache, que chamava `/api/items` (removido) → HTTP 404 |
+
+## Sessão 09/06/2026 — Perfil do usuário (menu + troca de senha)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Endpoint `PUT /api/auth/me` (atualizar perfil) | Done | Handler `updateProfile` (autenticado): valida nome (obrigatório, ≤200) e senha opcional (mín. 8). Senha em branco mantém a atual; preenchida regrava o `password_hash` (bcrypt) |
+| Queries sqlc `UpdateOwnName` / `UpdateOwnPassword` | Done | Atualizam apenas a própria conta (por `id` da sessão) |
+| `api.updateProfile` + `useAuth().updateUser` | Done | Método na `api.ts`; contexto de auth expõe `updateUser` para refletir o nome alterado na UI sem recarregar |
+| Componente `UserMenu` (avatar de iniciais) | Done | `components/UserMenu.tsx`; avatar com iniciais do nome, menu suspenso (nome, e-mail, **Perfil**, **Sair**); fecha por clique-fora e Esc. Substitui "nome + Sair" nos cabeçalhos de RoadmapList e Users |
+| Página `/perfil` | Done | `pages/Profile.tsx`; nome editável, e-mail somente leitura, nova senha + confirmar com botão Mostrar/Ocultar; mín. 8 e confirmação no cliente; toast de sucesso. Rota protegida (sem `adminOnly`) |
+| Testes Go (`TestUpdateProfile`, `TestUpdateProfileRequiresAuth`) | Done | Cobrem: só nome (senha antiga preservada), nome vazio 400, senha curta 400, nova senha válida (antiga deixa de valer), 401 sem sessão. `go test ./...` verde |
+| Testes Vitest (`Profile.test.tsx`) | Done | 5 testes: salva só o nome (password undefined), envia nova senha, bloqueia <8, bloqueia senhas diferentes, alterna mostrar/ocultar. 20 testes / 6 arquivos verdes; `tsc -b` ok |
+| Verificação visual (Playwright) | Done | 3 screenshots revisadas: menu do usuário aberto, página de perfil, senha visível |

@@ -251,6 +251,55 @@ func (q *Queries) SetInitialAdminPasswords(ctx context.Context, passwordHash *st
 	return err
 }
 
+const updateOwnName = `-- name: UpdateOwnName :one
+UPDATE users SET name = $2 WHERE id = $1
+RETURNING id, email, name, role, auth_provider, created_at
+`
+
+type UpdateOwnNameParams struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+type UpdateOwnNameRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	AuthProvider string             `json:"auth_provider"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+// UpdateOwnName altera o nome da própria conta do usuário logado.
+func (q *Queries) UpdateOwnName(ctx context.Context, arg UpdateOwnNameParams) (UpdateOwnNameRow, error) {
+	row := q.db.QueryRow(ctx, updateOwnName, arg.ID, arg.Name)
+	var i UpdateOwnNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.AuthProvider,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateOwnPassword = `-- name: UpdateOwnPassword :exec
+UPDATE users SET password_hash = $2 WHERE id = $1
+`
+
+type UpdateOwnPasswordParams struct {
+	ID           int64   `json:"id"`
+	PasswordHash *string `json:"password_hash"`
+}
+
+// UpdateOwnPassword define um novo hash de senha para a própria conta.
+func (q *Queries) UpdateOwnPassword(ctx context.Context, arg UpdateOwnPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateOwnPassword, arg.ID, arg.PasswordHash)
+	return err
+}
+
 const updateUserRole = `-- name: UpdateUserRole :one
 UPDATE users SET role = $2 WHERE id = $1
 RETURNING id, email, name, role, auth_provider, created_at

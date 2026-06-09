@@ -4,11 +4,12 @@ import { api } from "../api";
 import type { Roadmap, RoadmapInput } from "../api";
 import { useAuth } from "../auth";
 import { roadmapPath } from "../roadmap-path";
+import UserMenu from "../components/UserMenu";
 
 type Tab = "mine" | "all";
 
 export default function RoadmapList() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const nav = useNavigate();
   const [tab, setTab] = useState<Tab>("mine");
@@ -43,8 +44,7 @@ export default function RoadmapList() {
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           {isAdmin && <Link to="/admin/users" style={btnLight}>Usuários</Link>}
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>{user?.name}</span>
-          <button onClick={logout} style={btnGhost}>Sair</button>
+          <UserMenu />
         </div>
       </header>
 
@@ -167,6 +167,5 @@ const input: React.CSSProperties = {
   fontSize: 14, outline: "none", background: "#f8fafc", color: "#0f172a", boxSizing: "border-box",
 };
 const btnLight: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, background: "#1e293b", color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none" };
-const btnGhost: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, border: "1px solid #334155", background: "transparent", color: "#94a3b8", fontSize: 12, cursor: "pointer" };
 const btnGhostDark: React.CSSProperties = { padding: "8px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 const btnAccent: React.CSSProperties = { padding: "8px 14px", borderRadius: 8, border: "none", background: "#3b82f6", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" };

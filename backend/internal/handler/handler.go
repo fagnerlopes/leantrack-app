@@ -94,6 +94,7 @@ func (h *Handler) Routes() http.Handler {
 	adminM := func(next http.Handler) http.Handler { return authM(auth.RequireAdmin(next)) }
 
 	mux.Handle("GET /api/auth/me", authM(http.HandlerFunc(h.me)))
+	mux.Handle("PUT /api/auth/me", authM(http.HandlerFunc(h.updateProfile)))
 
 	// Roadmaps (endereçados por id; leitura aberta a qualquer logado).
 	mux.Handle("GET /api/roadmaps", authM(http.HandlerFunc(h.listRoadmaps)))
@@ -209,6 +210,59 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
+}
+
+// updateProfile permite que o usuário logado altere o próprio nome e,
+// opcionalmente, defina uma nova senha. Senha em branco = mantém a atual.
+type updateProfileReq struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+func (h *Handler) updateProfile(w http.ResponseWriter, r *http.Request) {
+	me := auth.FromContext(r.Context())
+	if me == nil {
+		writeErr(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
+	var req updateProfileReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		writeErr(w, http.StatusBadRequest, "nome obrigatório")
+		return
+	}
+	if len(name) > 200 {
+		writeErr(w, http.StatusBadRequest, "nome muito longo (máx. 200)")
+		return
+	}
+	// Senha é opcional: só altera quando preenchida.
+	if req.Password != "" {
+		if len(req.Password) < 8 {
+			writeErr(w, http.StatusBadRequest, "a senha deve ter ao menos 8 caracteres")
+			return
+		}
+		hash, err := auth.HashPassword(req.Password)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "erro ao processar senha")
+			return
+		}
+		if err := h.Q.UpdateOwnPassword(r.Context(), sqlc.UpdateOwnPasswordParams{ID: me.ID, PasswordHash: &hash}); err != nil {
+			slog.Error("update own password", "err", err)
+			writeErr(w, http.StatusInternalServerError, "erro ao atualizar senha")
+			return
+		}
+	}
+	u, err := h.Q.UpdateOwnName(r.Context(), sqlc.UpdateOwnNameParams{ID: me.ID, Name: name})
+	if err != nil {
+		slog.Error("update own name", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao atualizar")
+		return
+	}
+	writeJSON(w, http.StatusOK, auth.SessionUser{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role})
 }
 
 // ──────────────────────────────────────────────────────────────

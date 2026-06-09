@@ -258,6 +258,60 @@ func TestSetInitialAdminPasswords(t *testing.T) {
 	}
 }
 
+func TestUpdateProfile(t *testing.T) {
+	srv, q := newTestServer(t)
+	cookie := loginAs(t, q, "perfil@test.local", "user")
+
+	// Só nome (senha em branco) → 200 e nome atualizado; senha antiga continua válida.
+	resp, data := doReq(t, srv, http.MethodPut, "/api/auth/me", cookie,
+		map[string]string{"name": "Nome Novo", "password": ""})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("atualizar só o nome deveria ser 200, veio %d (%s)", resp.StatusCode, data)
+	}
+	var dto auth.SessionUser
+	_ = json.Unmarshal(data, &dto)
+	if dto.Name != "Nome Novo" {
+		t.Fatalf("nome esperado 'Nome Novo', veio %q", dto.Name)
+	}
+	u, _ := q.GetUserByEmail(context.Background(), "perfil@test.local")
+	if u.PasswordHash == nil || !auth.CheckPassword(*u.PasswordHash, "senha-teste") {
+		t.Fatal("senha antiga deveria continuar válida quando o campo senha vem em branco")
+	}
+
+	// Nome vazio → 400.
+	resp, _ = doReq(t, srv, http.MethodPut, "/api/auth/me", cookie, map[string]string{"name": "  ", "password": ""})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("nome vazio deveria ser 400, veio %d", resp.StatusCode)
+	}
+
+	// Senha curta (< 8) → 400.
+	resp, _ = doReq(t, srv, http.MethodPut, "/api/auth/me", cookie, map[string]string{"name": "Nome Novo", "password": "1234567"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("senha curta deveria ser 400, veio %d", resp.StatusCode)
+	}
+
+	// Nova senha válida → 200 e a nova senha passa a valer (a antiga não).
+	resp, _ = doReq(t, srv, http.MethodPut, "/api/auth/me", cookie, map[string]string{"name": "Nome Novo", "password": "novaSenha123"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("nova senha válida deveria ser 200, veio %d", resp.StatusCode)
+	}
+	u2, _ := q.GetUserByEmail(context.Background(), "perfil@test.local")
+	if !auth.CheckPassword(*u2.PasswordHash, "novaSenha123") {
+		t.Fatal("a nova senha deveria valer após a atualização")
+	}
+	if auth.CheckPassword(*u2.PasswordHash, "senha-teste") {
+		t.Fatal("a senha antiga não deveria mais valer após a troca")
+	}
+}
+
+func TestUpdateProfileRequiresAuth(t *testing.T) {
+	srv, _ := newTestServer(t)
+	resp, _ := doReq(t, srv, http.MethodPut, "/api/auth/me", nil, map[string]string{"name": "X"})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("sem sessão deveria ser 401, veio %d", resp.StatusCode)
+	}
+}
+
 // itoa converte int64 sem depender de fmt.
 func itoa(n int64) string {
 	if n == 0 {

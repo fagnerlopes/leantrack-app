@@ -65,6 +65,9 @@ export const api = {
     req<User>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   logout: () => req<{ status: string }>("/api/auth/logout", { method: "POST" }),
   me: () => req<User>("/api/auth/me"),
+  // Atualiza o próprio perfil. password vazio/omitido = mantém a senha atual.
+  updateProfile: (input: { name: string; password?: string }) =>
+    req<User>("/api/auth/me", { method: "PUT", body: JSON.stringify(input) }),
 
   // Roadmaps
   listRoadmaps: (mine = false) =>

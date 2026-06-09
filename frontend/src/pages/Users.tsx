@@ -3,9 +3,10 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import type { AdminUser } from "../api";
 import { useAuth } from "../auth";
+import UserMenu from "../components/UserMenu";
 
 export default function Users() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -53,8 +54,7 @@ export default function Users() {
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <Link to="/" style={btnLight}>← Roadmaps</Link>
           <button onClick={() => setCreating(true)} style={btnAccent}>+ Novo usuário</button>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>{user?.name}</span>
-          <button onClick={logout} style={btnGhost}>Sair</button>
+          <UserMenu />
         </div>
       </header>
 
@@ -157,7 +157,6 @@ const modalCard: React.CSSProperties = { background: "#fff", borderRadius: 14, p
 const lbl: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 600, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 };
 const input: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontSize: 14, outline: "none", background: "#f8fafc", color: "#0f172a", boxSizing: "border-box" };
 const btnLight: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, background: "#1e293b", color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none" };
-const btnGhost: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, border: "1px solid #334155", background: "transparent", color: "#94a3b8", fontSize: 12, cursor: "pointer" };
 const btnGhostDark: React.CSSProperties = { padding: "8px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 const btnAccent: React.CSSProperties = { padding: "7px 14px", borderRadius: 8, border: "none", background: "#3b82f6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" };
 const btnSmallDanger: React.CSSProperties = { padding: "5px 10px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fff", color: "#dc2626", fontSize: 11, fontWeight: 600 };

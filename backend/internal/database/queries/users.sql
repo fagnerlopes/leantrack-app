@@ -45,6 +45,15 @@ RETURNING id, email, name, role, auth_provider, created_at;
 -- name: CountAdmins :one
 SELECT COUNT(*) FROM users WHERE role = 'admin';
 
+-- UpdateOwnName altera o nome da própria conta do usuário logado.
+-- name: UpdateOwnName :one
+UPDATE users SET name = $2 WHERE id = $1
+RETURNING id, email, name, role, auth_provider, created_at;
+
+-- UpdateOwnPassword define um novo hash de senha para a própria conta.
+-- name: UpdateOwnPassword :exec
+UPDATE users SET password_hash = $2 WHERE id = $1;
+
 -- name: CreateSession :exec
 INSERT INTO sessions (token, user_id, expires_at)
 VALUES ($1, $2, $3);

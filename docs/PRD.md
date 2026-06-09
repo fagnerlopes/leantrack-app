@@ -60,6 +60,11 @@ Tudo é protegido por autenticação; nada é público.
 - Usuários criados via seed (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` no `.env`).
 - Sessão por cookie HttpOnly, válida por 7 dias.
 
+### Perfil (`/perfil`) — qualquer usuário autenticado
+- Acessível pelo **menu do usuário** (avatar com as iniciais do nome) no canto superior direito, com atalhos para **Perfil** e **Sair**.
+- O usuário altera o **próprio nome** e, opcionalmente, define uma **nova senha** (mín. 8 caracteres, com campo de confirmação e botão mostrar/ocultar). Campo de senha em branco mantém a senha atual.
+- O e-mail é somente leitura.
+
 ## Fluxos do usuário
 
 1. **Diretoria entra para apresentar o roadmap:** faz login → escolhe o roadmap em "Todos os roadmaps" → abre o Gantt (modo leitura) → filtra por trimestre → clica "Exportar PDF" → cola no deck.
