@@ -4,7 +4,7 @@ import { api } from "../api";
 import type { Roadmap, RoadmapInput } from "../api";
 import { useAuth } from "../auth";
 import { roadmapPath } from "../roadmap-path";
-import UserMenu from "../components/UserMenu";
+import AppHeader from "../components/AppHeader";
 
 type Tab = "mine" | "all";
 
@@ -37,16 +37,11 @@ export default function RoadmapList() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
-      <header style={headerStyle}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Roadmaps</div>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>Squad Cloud · Locaweb</div>
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          {isAdmin && <Link to="/admin/users" style={btnLight}>Usuários</Link>}
-          <UserMenu />
-        </div>
-      </header>
+      <AppHeader
+        title="Roadmaps"
+        subtitle="Squad Cloud · Locaweb"
+        actions={isAdmin && <Link to="/admin/users" style={btnLight}>Usuários</Link>}
+      />
 
       <div style={{ padding: "16px 24px", display: "flex", alignItems: "center", gap: 8, background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
         <TabButton active={tab === "mine"} onClick={() => setTab("mine")}>Meus roadmaps</TabButton>
@@ -138,10 +133,6 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-const headerStyle: React.CSSProperties = {
-  background: "#0f172a", color: "#fff", padding: "16px 24px",
-  display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
-};
 const cardStyle: React.CSSProperties = {
   display: "block", background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0",
   padding: 18, textDecoration: "none", boxShadow: "0 1px 2px rgba(0,0,0,0.04)",

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { Item, ItemInput, Roadmap, RoadmapInput } from "../api";
-import { useAuth } from "../auth";
+import AppHeader from "../components/AppHeader";
 import Gantt from "../Gantt";
 import ItemModal from "../ItemModal";
 import { QUARTERS, calcRisk, dateToFractional } from "../roadmap-utils";
@@ -19,7 +19,6 @@ const emptyForm: ItemInput = {
 export default function RoadmapView() {
   const { idSlug } = useParams();
   const roadmapId = parseRoadmapId(idSlug);
-  const { user, logout } = useAuth();
   const nav = useNavigate();
 
   const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
@@ -164,32 +163,26 @@ export default function RoadmapView() {
 
   return (
     <div style={{ minHeight: "100vh" }}>
-      <header style={headerStyle}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Link to="/" style={{ color: "#94a3b8", textDecoration: "none", fontSize: 13 }}>← Roadmaps</Link>
-            <span style={{ fontSize: 18, fontWeight: 700 }}>{roadmap?.name}</span>
-          </div>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
-            {roadmap?.ownerName} · {items.length} {items.length === 1 ? "iniciativa" : "iniciativas"}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          {blockedCount > 0 && <span style={chipStyle("#fee2e2", "#991b1b", "#fca5a5")}>⚠ {blockedCount} crítico{blockedCount > 1 ? "s" : ""}</span>}
-          {alertCount > 0 && <span style={chipStyle("#fef3c7", "#92400e", "#fcd34d")}>⚡ {alertCount} alerta{alertCount > 1 ? "s" : ""}</span>}
-          {canEdit ? (
-            <>
-              <button onClick={() => setCreating(true)} style={btnAccent}>+ Nova iniciativa</button>
-              <button onClick={() => setRenaming(true)} style={btnLight}>Renomear</button>
-              <button onClick={() => setDeleting(true)} style={btnDanger}>Excluir roadmap</button>
-            </>
-          ) : (
-            <span style={readOnlyBadge}>🔒 Somente leitura — roadmap de {roadmap?.ownerName}</span>
-          )}
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>{user?.name}</span>
-          <button onClick={logout} style={btnGhost}>Sair</button>
-        </div>
-      </header>
+      <AppHeader
+        back={{ to: "/", label: "Roadmaps" }}
+        title={roadmap?.name}
+        subtitle={`${roadmap?.ownerName} · ${items.length} ${items.length === 1 ? "iniciativa" : "iniciativas"}`}
+        actions={
+          <>
+            {blockedCount > 0 && <span style={chipStyle("#fee2e2", "#991b1b", "#fca5a5")}>⚠ {blockedCount} crítico{blockedCount > 1 ? "s" : ""}</span>}
+            {alertCount > 0 && <span style={chipStyle("#fef3c7", "#92400e", "#fcd34d")}>⚡ {alertCount} alerta{alertCount > 1 ? "s" : ""}</span>}
+            {canEdit ? (
+              <>
+                <button onClick={() => setCreating(true)} style={btnAccent}>+ Nova iniciativa</button>
+                <button onClick={() => setRenaming(true)} style={btnLight}>Renomear</button>
+                <button onClick={() => setDeleting(true)} style={btnDanger}>Excluir roadmap</button>
+              </>
+            ) : (
+              <span style={readOnlyBadge}>🔒 Somente leitura — roadmap de {roadmap?.ownerName}</span>
+            )}
+          </>
+        }
+      />
 
       <div style={{ padding: "16px 24px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
         <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={[
@@ -349,10 +342,6 @@ function chipStyle(bg: string, color: string, border: string): React.CSSProperti
   return { fontSize: 11, fontWeight: 700, background: bg, color, padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}` };
 }
 
-const headerStyle: React.CSSProperties = {
-  background: "#0f172a", color: "#fff", padding: "16px 24px",
-  display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
-};
 const readOnlyBadge: React.CSSProperties = {
   fontSize: 12, fontWeight: 600, background: "#1e293b", color: "#cbd5e1",
   padding: "6px 12px", borderRadius: 8, border: "1px solid #334155",
@@ -374,7 +363,6 @@ const input: React.CSSProperties = {
   fontSize: 14, outline: "none", background: "#f8fafc", color: "#0f172a", boxSizing: "border-box",
 };
 const btnLight: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, background: "#1e293b", color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none", border: "none", cursor: "pointer" };
-const btnGhost: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, border: "1px solid #334155", background: "transparent", color: "#94a3b8", fontSize: 12, cursor: "pointer" };
 const btnGhostDark: React.CSSProperties = { padding: "8px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 const btnAccent: React.CSSProperties = { padding: "7px 14px", borderRadius: 8, border: "none", background: "#3b82f6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" };
 const btnDanger: React.CSSProperties = { padding: "7px 14px", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" };

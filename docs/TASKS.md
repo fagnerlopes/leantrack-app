@@ -120,3 +120,13 @@ Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · ADRs
 | Testes Go (`TestUpdateProfile`, `TestUpdateProfileRequiresAuth`) | Done | Cobrem: só nome (senha antiga preservada), nome vazio 400, senha curta 400, nova senha válida (antiga deixa de valer), 401 sem sessão. `go test ./...` verde |
 | Testes Vitest (`Profile.test.tsx`) | Done | 5 testes: salva só o nome (password undefined), envia nova senha, bloqueia <8, bloqueia senhas diferentes, alterna mostrar/ocultar. 20 testes / 6 arquivos verdes; `tsc -b` ok |
 | Verificação visual (Playwright) | Done | 3 screenshots revisadas: menu do usuário aberto, página de perfil, senha visível |
+
+## Sessão 09/06/2026 — Header padronizado (avatar/menu em todas as rotas + botão voltar)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Componente `AppHeader` compartilhado | Done | `components/AppHeader.tsx`; props `title`, `subtitle`, `back` e `actions`; sempre renderiza o `UserMenu` à direita. Consolida o cabeçalho slate (`#0f172a`) antes duplicado em cada página |
+| Menu do usuário no RoadmapView | Done | A página de visualização/edição era a única sem `UserMenu` (mostrava só "nome + Sair"). Agora usa `AppHeader`, exibindo avatar + dropdown (Perfil/Sair) como nas demais rotas |
+| Botão "voltar" mais intuitivo | Done | `BackButton` no `AppHeader`: pílula com borda e fundo (`#1e293b`/`#334155`), seta + rótulo "Roadmaps", realce e leve deslocamento da seta no hover. Substitui o link cinza-claro (`#94a3b8`) quase imperceptível do RoadmapView |
+| Migração das 4 páginas para `AppHeader` | Done | `RoadmapList` (home, sem voltar), `RoadmapView`, `Profile` e `Users`; removidos `headerStyle`/`btnLight`/imports órfãos. `tsc -b` limpo |
+| Testes + verificação visual | Done | 20 testes / 6 arquivos Vitest verdes (sem alterações de teste necessárias). 4 screenshots revisadas: lista, roadmap, menu aberto no roadmap, perfil — header idêntico em todas |

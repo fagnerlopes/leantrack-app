@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import UserMenu from "../components/UserMenu";
+import AppHeader from "../components/AppHeader";
 
 export default function Profile() {
   const { user, updateUser } = useAuth();
@@ -40,16 +39,7 @@ export default function Profile() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
-      <header style={headerStyle}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Perfil</div>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>Sua conta</div>
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <Link to="/" style={btnLight}>← Roadmaps</Link>
-          <UserMenu />
-        </div>
-      </header>
+      <AppHeader back={{ to: "/", label: "Roadmaps" }} title="Perfil" subtitle="Sua conta" />
 
       <div style={{ padding: 24, maxWidth: 560, margin: "0 auto" }}>
         <form onSubmit={submit} style={card}>
@@ -113,10 +103,6 @@ export default function Profile() {
   );
 }
 
-const headerStyle: React.CSSProperties = {
-  background: "#0f172a", color: "#fff", padding: "16px 24px",
-  display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
-};
 const card: React.CSSProperties = {
   background: "#fff", borderRadius: 14, border: "1px solid #e2e8f0", padding: 28,
   boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
@@ -139,5 +125,4 @@ const toggleBtn: React.CSSProperties = {
 const errBox: React.CSSProperties = {
   marginTop: 16, padding: "8px 12px", background: "#fee2e2", color: "#991b1b", fontSize: 12, borderRadius: 6,
 };
-const btnLight: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, background: "#1e293b", color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none" };
 const btnAccent: React.CSSProperties = { padding: "9px 18px", borderRadius: 8, border: "none", background: "#3b82f6", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" };
