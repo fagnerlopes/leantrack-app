@@ -173,6 +173,35 @@ func TestUpdateCollaborator(t *testing.T) {
 	}
 }
 
+func TestGetRoadmapReflectsCollaboration(t *testing.T) {
+	srv, q := newTestServer(t)
+	owner := loginAs(t, q, "dona5@test.local", "user")
+	editor := loginAs(t, q, "editor5@test.local", "user")
+	id, _ := createRoadmap(t, srv, owner, "Roadmap Flags 2026")
+
+	resp, data := doReq(t, srv, http.MethodGet, "/api/roadmaps/"+itoa(id), editor, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get deveria ser 200, veio %d", resp.StatusCode)
+	}
+	var dto roadmapDTO
+	_ = json.Unmarshal(data, &dto)
+	if dto.CanEdit || dto.CanShare || dto.CanDelete || dto.IsOwner {
+		t.Fatalf("sem convite todas as flags deveriam ser false; veio %+v", dto)
+	}
+
+	doReq(t, srv, http.MethodPost, "/api/roadmaps/"+itoa(id)+"/collaborators", owner,
+		map[string]any{"email": "editor5@test.local", "canEdit": true, "canShare": true})
+
+	resp, data = doReq(t, srv, http.MethodGet, "/api/roadmaps/"+itoa(id), editor, nil)
+	_ = json.Unmarshal(data, &dto)
+	if !dto.CanEdit || !dto.CanShare {
+		t.Fatalf("após convite canEdit e canShare deveriam ser true; veio %+v", dto)
+	}
+	if dto.CanDelete || dto.IsOwner {
+		t.Fatalf("colaborador nunca tem canDelete/isOwner; veio %+v", dto)
+	}
+}
+
 func TestCannotRemoveOwnerAsCollaborator(t *testing.T) {
 	srv, q := newTestServer(t)
 	owner := loginAs(t, q, "dona4@test.local", "user")

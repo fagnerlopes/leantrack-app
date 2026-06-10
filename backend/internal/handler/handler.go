@@ -669,6 +669,26 @@ func (h *Handler) listRoadmaps(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "não autenticado")
 		return
 	}
+	collabs := map[int64]sqlc.ListMyCollaborationsRow{}
+	if rows, err := h.Q.ListMyCollaborations(r.Context(), u.ID); err == nil {
+		for _, c := range rows {
+			collabs[c.RoadmapID] = c
+		}
+	}
+	dto := func(id int64, name, slug, desc string, ownerID int64, ownerName string, count int64) roadmapDTO {
+		isOwner := ownerID == u.ID
+		canEdit, canShare := isOwner, isOwner
+		if !isOwner {
+			if c, ok := collabs[id]; ok {
+				canEdit, canShare = c.CanEdit, c.CanShare
+			}
+		}
+		return roadmapDTO{
+			ID: id, Name: name, Slug: slug, Description: desc,
+			OwnerID: ownerID, OwnerName: ownerName, ItemCount: count,
+			CanEdit: canEdit, CanShare: canShare, CanDelete: isOwner, IsOwner: isOwner,
+		}
+	}
 	out := make([]roadmapDTO, 0)
 	if r.URL.Query().Get("mine") == "true" {
 		rows, err := h.Q.ListMyRoadmaps(r.Context(), u.ID)
@@ -677,11 +697,7 @@ func (h *Handler) listRoadmaps(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, rm := range rows {
-			out = append(out, roadmapDTO{
-				ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
-				OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, ItemCount: rm.ItemCount,
-				CanEdit: rm.OwnerID == u.ID,
-			})
+			out = append(out, dto(rm.ID, rm.Name, rm.Slug, rm.Description, rm.OwnerID, rm.OwnerName, rm.ItemCount))
 		}
 	} else {
 		rows, err := h.Q.ListRoadmaps(r.Context())
@@ -690,11 +706,7 @@ func (h *Handler) listRoadmaps(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, rm := range rows {
-			out = append(out, roadmapDTO{
-				ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
-				OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, ItemCount: rm.ItemCount,
-				CanEdit: rm.OwnerID == u.ID,
-			})
+			out = append(out, dto(rm.ID, rm.Name, rm.Slug, rm.Description, rm.OwnerID, rm.OwnerName, rm.ItemCount))
 		}
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -780,16 +792,21 @@ func (h *Handler) getRoadmap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ownerName := u.Name
-	if rm.OwnerID != u.ID {
+	isOwner := rm.OwnerID == u.ID
+	canEdit, canShare := isOwner, isOwner
+	if !isOwner {
 		if owner, err := h.Q.GetUserByID(r.Context(), rm.OwnerID); err == nil {
 			ownerName = owner.Name
+		}
+		if c, err := h.Q.GetCollaborator(r.Context(), sqlc.GetCollaboratorParams{RoadmapID: id, UserID: u.ID}); err == nil {
+			canEdit, canShare = c.CanEdit, c.CanShare
 		}
 	}
 	count, _ := h.Q.CountItemsByRoadmap(r.Context(), id)
 	writeJSON(w, http.StatusOK, roadmapDTO{
 		ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
 		OwnerID: rm.OwnerID, OwnerName: ownerName, ItemCount: count,
-		CanEdit: rm.OwnerID == u.ID,
+		CanEdit: canEdit, CanShare: canShare, CanDelete: isOwner, IsOwner: isOwner,
 	})
 }
 
