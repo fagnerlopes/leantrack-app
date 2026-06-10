@@ -198,6 +198,64 @@ func (q *Queries) ListRoadmaps(ctx context.Context) ([]ListRoadmapsRow, error) {
 	return items, nil
 }
 
+const listSharedRoadmaps = `-- name: ListSharedRoadmaps :many
+SELECT r.id, r.owner_id, r.name, r.slug, r.description, r.created_at, r.updated_at,
+       u.name AS owner_name,
+       (SELECT COUNT(*) FROM roadmap_items i WHERE i.roadmap_id = r.id) AS item_count,
+       c.can_edit, c.can_share
+FROM roadmap_collaborators c
+JOIN roadmaps r ON r.id = c.roadmap_id
+JOIN users u    ON u.id = r.owner_id
+WHERE c.user_id = $1
+ORDER BY r.name ASC
+`
+
+type ListSharedRoadmapsRow struct {
+	ID          int64              `json:"id"`
+	OwnerID     int64              `json:"owner_id"`
+	Name        string             `json:"name"`
+	Slug        string             `json:"slug"`
+	Description string             `json:"description"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	OwnerName   string             `json:"owner_name"`
+	ItemCount   int64              `json:"item_count"`
+	CanEdit     bool               `json:"can_edit"`
+	CanShare    bool               `json:"can_share"`
+}
+
+func (q *Queries) ListSharedRoadmaps(ctx context.Context, userID int64) ([]ListSharedRoadmapsRow, error) {
+	rows, err := q.db.Query(ctx, listSharedRoadmaps, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSharedRoadmapsRow
+	for rows.Next() {
+		var i ListSharedRoadmapsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OwnerName,
+			&i.ItemCount,
+			&i.CanEdit,
+			&i.CanShare,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateRoadmap = `-- name: UpdateRoadmap :one
 UPDATE roadmaps
 SET name = $2, slug = $3, description = $4, updated_at = now()
