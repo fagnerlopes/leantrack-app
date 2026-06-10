@@ -198,3 +198,69 @@ func RequireRoadmapOwner(q *sqlc.Queries) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// roadmapAccess carrega o roadmap pelo path {id} e a relação de colaboração do
+// usuário logado, então delega a decisão a allow(). Centraliza a resolução de
+// id → roadmap → colaborador usada pelos middlewares de edição e de
+// compartilhamento. 401 sem sessão, 400 id inválido, 404 inexistente,
+// 403 quando allow() recusa.
+func roadmapAccess(
+	q *sqlc.Queries,
+	allow func(u *SessionUser, ownerID int64, canEdit, canShare bool) bool,
+	forbidMsg string,
+) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u := FromContext(r.Context())
+			if u == nil {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+			if err != nil {
+				http.Error(w, `{"error":"id inválido"}`, http.StatusBadRequest)
+				return
+			}
+			rm, err := q.GetRoadmapByID(r.Context(), id)
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, `{"error":"roadmap não encontrado"}`, http.StatusNotFound)
+				return
+			}
+			if err != nil {
+				http.Error(w, `{"error":"erro ao carregar roadmap"}`, http.StatusInternalServerError)
+				return
+			}
+			var canEdit, canShare bool
+			if rm.OwnerID != u.ID {
+				c, err := q.GetCollaborator(r.Context(), sqlc.GetCollaboratorParams{RoadmapID: id, UserID: u.ID})
+				if err == nil {
+					canEdit, canShare = c.CanEdit, c.CanShare
+				} else if !errors.Is(err, pgx.ErrNoRows) {
+					http.Error(w, `{"error":"erro ao carregar permissões"}`, http.StatusInternalServerError)
+					return
+				}
+			}
+			if !allow(u, rm.OwnerID, canEdit, canShare) {
+				http.Error(w, `{"error":"`+forbidMsg+`"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireRoadmapEditor libera mutação de conteúdo (itens) e renomear: dono OU
+// colaborador com can_edit.
+func RequireRoadmapEditor(q *sqlc.Queries) func(http.Handler) http.Handler {
+	return roadmapAccess(q, func(u *SessionUser, ownerID int64, canEdit, canShare bool) bool {
+		return ownerID == u.ID || canEdit
+	}, "apenas o dono ou um colaborador com permissão de edição pode alterar este roadmap")
+}
+
+// RequireRoadmapSharer libera a gestão de colaboradores: dono OU colaborador
+// com can_share.
+func RequireRoadmapSharer(q *sqlc.Queries) func(http.Handler) http.Handler {
+	return roadmapAccess(q, func(u *SessionUser, ownerID int64, canEdit, canShare bool) bool {
+		return ownerID == u.ID || canShare
+	}, "apenas o dono ou um colaborador com permissão de compartilhar pode gerenciar o acesso")
+}

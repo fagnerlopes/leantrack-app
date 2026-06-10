@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { Item, ItemInput, Roadmap, RoadmapInput } from "../api";
 import AppHeader from "../components/AppHeader";
+import ShareDialog from "../components/ShareDialog";
 import Gantt from "../Gantt";
 import ItemModal from "../ItemModal";
 import { QUARTERS, calcRisk, dateToFractional } from "../roadmap-utils";
@@ -32,10 +33,13 @@ export default function RoadmapView() {
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const ganttRef = useRef<HTMLDivElement>(null);
 
   const canEdit = !!roadmap?.canEdit;
+  const canShare = !!roadmap?.canShare;
+  const canDelete = !!roadmap?.canDelete;
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
 
   const reloadItems = useCallback(() => {
@@ -175,10 +179,14 @@ export default function RoadmapView() {
               <>
                 <button onClick={() => setCreating(true)} style={btnAccent}>+ Nova iniciativa</button>
                 <button onClick={() => setRenaming(true)} style={btnLight}>Renomear</button>
-                <button onClick={() => setDeleting(true)} style={btnDanger}>Excluir roadmap</button>
+                {canShare && <button onClick={() => setSharing(true)} style={btnLight}>Compartilhar</button>}
+                {canDelete && <button onClick={() => setDeleting(true)} style={btnDanger}>Excluir roadmap</button>}
               </>
             ) : (
-              <span style={readOnlyBadge}>🔒 Somente leitura — roadmap de {roadmap?.ownerName}</span>
+              <>
+                <span style={readOnlyBadge}>🔒 Somente leitura — roadmap de {roadmap?.ownerName}</span>
+                {canShare && <button onClick={() => setSharing(true)} style={btnLight}>Compartilhar</button>}
+              </>
             )}
           </>
         }
@@ -247,6 +255,10 @@ export default function RoadmapView() {
           onClose={() => setDeleting(false)}
           onConfirm={handleDeleteRoadmap}
         />
+      )}
+
+      {sharing && roadmap && (
+        <ShareDialog roadmapId={roadmap.id} onClose={() => setSharing(false)} />
       )}
 
       {toast && (

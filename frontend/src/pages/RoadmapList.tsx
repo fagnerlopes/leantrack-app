@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { roadmapPath } from "../roadmap-path";
 import AppHeader from "../components/AppHeader";
 
-type Tab = "mine" | "all";
+type Tab = "mine" | "shared" | "all";
 
 export default function RoadmapList() {
   const { user } = useAuth();
@@ -21,7 +21,9 @@ export default function RoadmapList() {
   const load = useCallback((t: Tab) => {
     setLoading(true);
     setErr(null);
-    api.listRoadmaps(t === "mine")
+    const source =
+      t === "shared" ? api.listSharedRoadmaps() : api.listRoadmaps(t === "mine");
+    source
       .then(setRoadmaps)
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
@@ -45,6 +47,7 @@ export default function RoadmapList() {
 
       <div style={{ padding: "16px 24px", display: "flex", alignItems: "center", gap: 8, background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
         <TabButton active={tab === "mine"} onClick={() => setTab("mine")}>Meus roadmaps</TabButton>
+        <TabButton active={tab === "shared"} onClick={() => setTab("shared")}>Compartilhados comigo</TabButton>
         <TabButton active={tab === "all"} onClick={() => setTab("all")}>Todos os roadmaps</TabButton>
         <button onClick={() => setCreating(true)} style={{ ...btnAccent, marginLeft: "auto" }}>+ Novo roadmap</button>
       </div>
@@ -56,6 +59,8 @@ export default function RoadmapList() {
           <div style={{ color: "#94a3b8", padding: "40px 0", textAlign: "center" }}>
             {tab === "mine"
               ? 'Você ainda não criou nenhum roadmap. Clique em "+ Novo roadmap".'
+              : tab === "shared"
+              ? "Ninguém compartilhou um roadmap com você ainda."
               : "Nenhum roadmap cadastrado."}
           </div>
         )}
@@ -64,7 +69,11 @@ export default function RoadmapList() {
             <Link key={rm.id} to={roadmapPath(rm)} style={cardStyle}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{rm.name}</div>
-                {rm.canEdit && <span style={ownerBadge}>seu</span>}
+                {rm.isOwner
+                  ? <span style={ownerBadge}>seu</span>
+                  : rm.canEdit
+                  ? <span style={sharedBadge}>compartilhado</span>
+                  : null}
               </div>
               {rm.description && (
                 <div style={{ fontSize: 12, color: "#64748b", marginTop: 6, lineHeight: 1.4 }}>{rm.description}</div>
@@ -139,6 +148,10 @@ const cardStyle: React.CSSProperties = {
 };
 const ownerBadge: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1e40af",
+  padding: "2px 7px", borderRadius: 999, textTransform: "uppercase", letterSpacing: "0.05em",
+};
+const sharedBadge: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700, background: "#dcfce7", color: "#166534",
   padding: "2px 7px", borderRadius: 999, textTransform: "uppercase", letterSpacing: "0.05em",
 };
 const overlay: React.CSSProperties = {

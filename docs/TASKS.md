@@ -130,3 +130,19 @@ Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · ADRs
 | Botão "voltar" mais intuitivo | Done | `BackButton` no `AppHeader`: pílula com borda e fundo (`#1e293b`/`#334155`), seta + rótulo "Roadmaps", realce e leve deslocamento da seta no hover. Substitui o link cinza-claro (`#94a3b8`) quase imperceptível do RoadmapView |
 | Migração das 4 páginas para `AppHeader` | Done | `RoadmapList` (home, sem voltar), `RoadmapView`, `Profile` e `Users`; removidos `headerStyle`/`btnLight`/imports órfãos. `tsc -b` limpo |
 | Testes + verificação visual | Done | 20 testes / 6 arquivos Vitest verdes (sem alterações de teste necessárias). 4 screenshots revisadas: lista, roadmap, menu aberto no roadmap, perfil — header idêntico em todas |
+
+## Sessão 10/06/2026 — Compartilhamento de roadmaps com colaboradores
+
+Spec: `docs/superpowers/specs/2026-06-10-compartilhamento-de-roadmaps-design.md` · ADR: 010 (compartilhamento por colaboradores — estende o 007)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Migração — tabela `roadmap_collaborators` | Done | Aditiva e idempotente; PK composta `(roadmap_id, user_id)`, flags `can_edit`/`can_share`, `created_at`/`created_by`, índice por `user_id`; não cria linha para o dono |
+| Middlewares de autorização (editor/sharer) | Done | `RequireRoadmapEditor` (dono OU `can_edit`) libera itens + renomear; `RequireRoadmapSharer` (dono OU `can_share`) libera gestão de colaboradores; `RequireRoadmapOwner` mantido só para excluir o roadmap |
+| Endpoints de colaboradores | Done | GET/POST `/api/roadmaps/{id}/collaborators`, PUT/DELETE `/api/roadmaps/{id}/collaborators/{userId}`; convite por e-mail de conta existente (404 amigável se não houver conta → solicitar a marcus.januario@locaweb.com.br); upsert de permissões; remoção nunca atinge o dono |
+| Listagem "Compartilhados comigo" | Done | GET `/api/roadmaps/shared` (autenticado) — roadmaps em que o usuário é colaborador, sem os próprios |
+| Flags do DTO de roadmap | Done | `canEdit` (semântica ampliada: dono ou `can_edit`), `canShare`, `canDelete` (só dono), `isOwner` — em listagens e no `GET /api/roadmaps/{id}` |
+| Aba "Compartilhados comigo" (`RoadmapList`) | Done | Terceira aba ao lado de "Meus roadmaps"/"Todos os roadmaps"; selo "COMPARTILHADO" no cartão |
+| Diálogo de compartilhamento (`RoadmapView`) | Done | Botão "Compartilhar" (visível ao dono e a quem tem `can_share`); convidar por e-mail com chaves "Pode editar"/"Pode compartilhar", lista de acesso (dono marcado, sem remover) e remoção; exclusão gated por `canDelete`; colaborador `can_edit` entra em modo edição |
+| Testes Go + Vitest | Done | Matriz de autorização (dono/editor/sharer/leitor/estranho), convite com e-mail inexistente, bloqueio de remoção do dono, upsert, listagem "compartilhados comigo"; Vitest: aba, diálogo, botão excluir oculto p/ não-dono, modo edição p/ colaborador |
+| Documentação (PRD, ADR 010, TASKS) | Done | PRD: modelo de propriedade + permissões editar/compartilhar, aba "Compartilhados comigo" + selo, botão "Compartilhar" e diálogo, removido "compartilhamento granular" do fora de escopo |

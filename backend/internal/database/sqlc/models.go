@@ -18,6 +18,15 @@ type Roadmap struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type RoadmapCollaborator struct {
+	RoadmapID int64              `json:"roadmap_id"`
+	UserID    int64              `json:"user_id"`
+	CanEdit   bool               `json:"can_edit"`
+	CanShare  bool               `json:"can_share"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	CreatedBy *int64             `json:"created_by"`
+}
+
 type RoadmapItem struct {
 	ID             int64              `json:"id"`
 	Title          string             `json:"title"`

@@ -20,8 +20,12 @@ import RoadmapView from "./RoadmapView";
 
 const base: Roadmap = {
   id: 5, name: "Roadmap Squad Cloud 2026", slug: "roadmap-squad-cloud-2026",
-  description: "", ownerId: 9, ownerName: "Eduarda Moraes", itemCount: 3, canEdit: false,
+  description: "", ownerId: 9, ownerName: "Eduarda Moraes", itemCount: 3,
+  canEdit: false, canShare: false, canDelete: false, isOwner: false,
 };
+
+// Conjunto de permissões de um dono (edita, compartilha, exclui).
+const ownerPerms = { canEdit: true, canShare: true, canDelete: true, isOwner: true };
 
 function renderView() {
   return render(
@@ -46,7 +50,7 @@ describe("RoadmapView", () => {
   });
 
   it("mostra controles de edição quando o usuário é o dono", async () => {
-    getRoadmap.mockResolvedValue({ ...base, canEdit: true });
+    getRoadmap.mockResolvedValue({ ...base, ...ownerPerms });
     renderView();
     await waitFor(() => expect(screen.getByRole("button", { name: "+ Nova iniciativa" })).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Excluir roadmap" })).toBeInTheDocument();
@@ -54,7 +58,7 @@ describe("RoadmapView", () => {
   });
 
   it("habilita o botão de exclusão somente quando o slug digitado confere", async () => {
-    getRoadmap.mockResolvedValue({ ...base, canEdit: true });
+    getRoadmap.mockResolvedValue({ ...base, ...ownerPerms });
     deleteRoadmap.mockResolvedValue(undefined);
     renderView();
     await waitFor(() => expect(screen.getByRole("button", { name: "Excluir roadmap" })).toBeInTheDocument());

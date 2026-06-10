@@ -38,3 +38,14 @@ RETURNING id, owner_id, name, slug, description, created_at, updated_at;
 
 -- name: DeleteRoadmap :exec
 DELETE FROM roadmaps WHERE id = $1;
+
+-- name: ListSharedRoadmaps :many
+SELECT r.id, r.owner_id, r.name, r.slug, r.description, r.created_at, r.updated_at,
+       u.name AS owner_name,
+       (SELECT COUNT(*) FROM roadmap_items i WHERE i.roadmap_id = r.id) AS item_count,
+       c.can_edit, c.can_share
+FROM roadmap_collaborators c
+JOIN roadmaps r ON r.id = c.roadmap_id
+JOIN users u    ON u.id = r.owner_id
+WHERE c.user_id = $1
+ORDER BY r.name ASC;

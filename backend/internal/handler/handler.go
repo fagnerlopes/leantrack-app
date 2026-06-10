@@ -90,6 +90,8 @@ func (h *Handler) Routes() http.Handler {
 	// Authenticated routes
 	authM := auth.Middleware(h.Q, true)
 	ownerM := auth.RequireRoadmapOwner(h.Q)
+	editorM := auth.RequireRoadmapEditor(h.Q)
+	sharerM := auth.RequireRoadmapSharer(h.Q)
 	// adminM: autenticado + papel admin.
 	adminM := func(next http.Handler) http.Handler { return authM(auth.RequireAdmin(next)) }
 
@@ -100,15 +102,23 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("GET /api/roadmaps", authM(http.HandlerFunc(h.listRoadmaps)))
 	mux.Handle("POST /api/roadmaps", authM(http.HandlerFunc(h.createRoadmap)))
 	mux.Handle("GET /api/roadmaps/{id}", authM(http.HandlerFunc(h.getRoadmap)))
-	mux.Handle("PUT /api/roadmaps/{id}", authM(ownerM(http.HandlerFunc(h.updateRoadmap))))
+	mux.Handle("PUT /api/roadmaps/{id}", authM(editorM(http.HandlerFunc(h.updateRoadmap))))
 	mux.Handle("DELETE /api/roadmaps/{id}", authM(ownerM(http.HandlerFunc(h.deleteRoadmap))))
 
-	// Itens escopados por roadmap (mutação só do dono; leitura aberta).
+	mux.Handle("GET /api/roadmaps/shared", authM(http.HandlerFunc(h.listSharedRoadmaps)))
+
+	// Itens escopados por roadmap (mutação por editor; leitura aberta).
 	mux.Handle("GET /api/roadmaps/{id}/items", authM(http.HandlerFunc(h.listRoadmapItems)))
-	mux.Handle("POST /api/roadmaps/{id}/items", authM(ownerM(http.HandlerFunc(h.createRoadmapItem))))
-	mux.Handle("PUT /api/roadmaps/{id}/items/reorder", authM(ownerM(http.HandlerFunc(h.reorderRoadmapItems))))
-	mux.Handle("PUT /api/roadmaps/{id}/items/{itemId}", authM(ownerM(http.HandlerFunc(h.updateRoadmapItem))))
-	mux.Handle("DELETE /api/roadmaps/{id}/items/{itemId}", authM(ownerM(http.HandlerFunc(h.deleteRoadmapItem))))
+	mux.Handle("POST /api/roadmaps/{id}/items", authM(editorM(http.HandlerFunc(h.createRoadmapItem))))
+	mux.Handle("PUT /api/roadmaps/{id}/items/reorder", authM(editorM(http.HandlerFunc(h.reorderRoadmapItems))))
+	mux.Handle("PUT /api/roadmaps/{id}/items/{itemId}", authM(editorM(http.HandlerFunc(h.updateRoadmapItem))))
+	mux.Handle("DELETE /api/roadmaps/{id}/items/{itemId}", authM(editorM(http.HandlerFunc(h.deleteRoadmapItem))))
+
+	// Colaboradores escopados por roadmap (gestão por quem pode compartilhar).
+	mux.Handle("GET /api/roadmaps/{id}/collaborators", authM(sharerM(http.HandlerFunc(h.listCollaborators))))
+	mux.Handle("POST /api/roadmaps/{id}/collaborators", authM(sharerM(http.HandlerFunc(h.addCollaborator))))
+	mux.Handle("PUT /api/roadmaps/{id}/collaborators/{userId}", authM(sharerM(http.HandlerFunc(h.updateCollaborator))))
+	mux.Handle("DELETE /api/roadmaps/{id}/collaborators/{userId}", authM(sharerM(http.HandlerFunc(h.removeCollaborator))))
 
 	// Administração de contas (somente admin).
 	mux.Handle("GET /api/admin/users", adminM(http.HandlerFunc(h.listUsers)))
@@ -629,6 +639,9 @@ type roadmapDTO struct {
 	OwnerName   string `json:"ownerName"`
 	ItemCount   int64  `json:"itemCount"`
 	CanEdit     bool   `json:"canEdit"`
+	CanShare    bool   `json:"canShare"`
+	CanDelete   bool   `json:"canDelete"`
+	IsOwner     bool   `json:"isOwner"`
 }
 
 type roadmapReq struct {
@@ -656,6 +669,26 @@ func (h *Handler) listRoadmaps(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "não autenticado")
 		return
 	}
+	collabs := map[int64]sqlc.ListMyCollaborationsRow{}
+	if rows, err := h.Q.ListMyCollaborations(r.Context(), u.ID); err == nil {
+		for _, c := range rows {
+			collabs[c.RoadmapID] = c
+		}
+	}
+	dto := func(id int64, name, slug, desc string, ownerID int64, ownerName string, count int64) roadmapDTO {
+		isOwner := ownerID == u.ID
+		canEdit, canShare := isOwner, isOwner
+		if !isOwner {
+			if c, ok := collabs[id]; ok {
+				canEdit, canShare = c.CanEdit, c.CanShare
+			}
+		}
+		return roadmapDTO{
+			ID: id, Name: name, Slug: slug, Description: desc,
+			OwnerID: ownerID, OwnerName: ownerName, ItemCount: count,
+			CanEdit: canEdit, CanShare: canShare, CanDelete: isOwner, IsOwner: isOwner,
+		}
+	}
 	out := make([]roadmapDTO, 0)
 	if r.URL.Query().Get("mine") == "true" {
 		rows, err := h.Q.ListMyRoadmaps(r.Context(), u.ID)
@@ -664,11 +697,7 @@ func (h *Handler) listRoadmaps(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, rm := range rows {
-			out = append(out, roadmapDTO{
-				ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
-				OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, ItemCount: rm.ItemCount,
-				CanEdit: rm.OwnerID == u.ID,
-			})
+			out = append(out, dto(rm.ID, rm.Name, rm.Slug, rm.Description, rm.OwnerID, rm.OwnerName, rm.ItemCount))
 		}
 	} else {
 		rows, err := h.Q.ListRoadmaps(r.Context())
@@ -677,12 +706,31 @@ func (h *Handler) listRoadmaps(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, rm := range rows {
-			out = append(out, roadmapDTO{
-				ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
-				OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, ItemCount: rm.ItemCount,
-				CanEdit: rm.OwnerID == u.ID,
-			})
+			out = append(out, dto(rm.ID, rm.Name, rm.Slug, rm.Description, rm.OwnerID, rm.OwnerName, rm.ItemCount))
 		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) listSharedRoadmaps(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	if u == nil {
+		writeErr(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
+	rows, err := h.Q.ListSharedRoadmaps(r.Context(), u.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao listar compartilhados")
+		return
+	}
+	out := make([]roadmapDTO, 0, len(rows))
+	for _, rm := range rows {
+		out = append(out, roadmapDTO{
+			ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
+			OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, ItemCount: rm.ItemCount,
+			CanEdit: rm.CanEdit, CanShare: rm.CanShare,
+			CanDelete: false, IsOwner: false,
+		})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -719,6 +767,7 @@ func (h *Handler) createRoadmap(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, roadmapDTO{
 		ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
 		OwnerID: rm.OwnerID, OwnerName: u.Name, ItemCount: 0, CanEdit: true,
+		CanShare: true, CanDelete: true, IsOwner: true,
 	})
 }
 
@@ -743,16 +792,21 @@ func (h *Handler) getRoadmap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ownerName := u.Name
-	if rm.OwnerID != u.ID {
+	isOwner := rm.OwnerID == u.ID
+	canEdit, canShare := isOwner, isOwner
+	if !isOwner {
 		if owner, err := h.Q.GetUserByID(r.Context(), rm.OwnerID); err == nil {
 			ownerName = owner.Name
+		}
+		if c, err := h.Q.GetCollaborator(r.Context(), sqlc.GetCollaboratorParams{RoadmapID: id, UserID: u.ID}); err == nil {
+			canEdit, canShare = c.CanEdit, c.CanShare
 		}
 	}
 	count, _ := h.Q.CountItemsByRoadmap(r.Context(), id)
 	writeJSON(w, http.StatusOK, roadmapDTO{
 		ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
 		OwnerID: rm.OwnerID, OwnerName: ownerName, ItemCount: count,
-		CanEdit: rm.OwnerID == u.ID,
+		CanEdit: canEdit, CanShare: canShare, CanDelete: isOwner, IsOwner: isOwner,
 	})
 }
 
@@ -794,6 +848,7 @@ func (h *Handler) updateRoadmap(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, roadmapDTO{
 		ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
 		OwnerID: rm.OwnerID, OwnerName: u.Name, ItemCount: count, CanEdit: true,
+		CanShare: true, CanDelete: true, IsOwner: true,
 	})
 }
 
@@ -827,6 +882,193 @@ func (h *Handler) deleteRoadmap(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.Q.DeleteRoadmap(r.Context(), id); err != nil {
 		writeErr(w, http.StatusInternalServerError, "erro ao remover")
+		return
+	}
+	writeJSON(w, http.StatusNoContent, nil)
+}
+
+// ──────────────────────────────────────────────────────────────
+// Colaboradores (compartilhamento)
+// ──────────────────────────────────────────────────────────────
+
+type collaboratorDTO struct {
+	UserID   int64  `json:"userId"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	CanEdit  bool   `json:"canEdit"`
+	CanShare bool   `json:"canShare"`
+}
+
+func (h *Handler) listCollaborators(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	rows, err := h.Q.ListCollaboratorsByRoadmap(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao listar colaboradores")
+		return
+	}
+	out := make([]collaboratorDTO, 0, len(rows))
+	for _, c := range rows {
+		out = append(out, collaboratorDTO{
+			UserID: c.UserID, Name: c.UserName, Email: c.UserEmail,
+			CanEdit: c.CanEdit, CanShare: c.CanShare,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type addCollaboratorReq struct {
+	Email    string `json:"email"`
+	CanEdit  bool   `json:"canEdit"`
+	CanShare bool   `json:"canShare"`
+}
+
+func (h *Handler) addCollaborator(w http.ResponseWriter, r *http.Request) {
+	actor := auth.FromContext(r.Context())
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var req addCollaboratorReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" {
+		writeErr(w, http.StatusBadRequest, "e-mail obrigatório")
+		return
+	}
+	rm, err := h.Q.GetRoadmapByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "roadmap não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar roadmap")
+		return
+	}
+	target, err := h.Q.GetUserByEmail(r.Context(), email)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "Não há conta com esse e-mail. Solicite o cadastro a marcus.januario@locaweb.com.br.")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao buscar usuário")
+		return
+	}
+	if target.ID == rm.OwnerID {
+		writeErr(w, http.StatusBadRequest, "o dono já tem acesso total ao roadmap")
+		return
+	}
+	createdBy := actor.ID
+	row, err := h.Q.UpsertCollaborator(r.Context(), sqlc.UpsertCollaboratorParams{
+		RoadmapID: id, UserID: target.ID,
+		CanEdit: req.CanEdit, CanShare: req.CanShare,
+		CreatedBy: &createdBy,
+	})
+	if err != nil {
+		slog.Error("upsert collaborator", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao convidar")
+		return
+	}
+	writeJSON(w, http.StatusCreated, collaboratorDTO{
+		UserID: target.ID, Name: target.Name, Email: target.Email,
+		CanEdit: row.CanEdit, CanShare: row.CanShare,
+	})
+}
+
+type updateCollaboratorReq struct {
+	CanEdit  bool `json:"canEdit"`
+	CanShare bool `json:"canShare"`
+}
+
+func (h *Handler) updateCollaborator(w http.ResponseWriter, r *http.Request) {
+	actor := auth.FromContext(r.Context())
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	userID, err := strconv.ParseInt(r.PathValue("userId"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "userId inválido")
+		return
+	}
+	var req updateCollaboratorReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	rm, err := h.Q.GetRoadmapByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "roadmap não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar roadmap")
+		return
+	}
+	if userID == rm.OwnerID {
+		writeErr(w, http.StatusBadRequest, "não é possível alterar as permissões do dono")
+		return
+	}
+	if _, err := h.Q.GetCollaborator(r.Context(), sqlc.GetCollaboratorParams{RoadmapID: id, UserID: userID}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "colaborador não encontrado")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar colaborador")
+		return
+	}
+	createdBy := actor.ID
+	row, err := h.Q.UpsertCollaborator(r.Context(), sqlc.UpsertCollaboratorParams{
+		RoadmapID: id, UserID: userID,
+		CanEdit: req.CanEdit, CanShare: req.CanShare,
+		CreatedBy: &createdBy,
+	})
+	if err != nil {
+		slog.Error("update collaborator", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao atualizar permissões")
+		return
+	}
+	u, _ := h.Q.GetUserByID(r.Context(), userID)
+	writeJSON(w, http.StatusOK, collaboratorDTO{
+		UserID: userID, Name: u.Name, Email: u.Email,
+		CanEdit: row.CanEdit, CanShare: row.CanShare,
+	})
+}
+
+func (h *Handler) removeCollaborator(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	userID, err := strconv.ParseInt(r.PathValue("userId"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "userId inválido")
+		return
+	}
+	rm, err := h.Q.GetRoadmapByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "roadmap não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar roadmap")
+		return
+	}
+	if userID == rm.OwnerID {
+		writeErr(w, http.StatusBadRequest, "não é possível remover o dono do roadmap")
+		return
+	}
+	if err := h.Q.DeleteCollaborator(r.Context(), sqlc.DeleteCollaboratorParams{RoadmapID: id, UserID: userID}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao remover colaborador")
 		return
 	}
 	writeJSON(w, http.StatusNoContent, nil)
