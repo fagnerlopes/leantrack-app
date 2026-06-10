@@ -9,6 +9,17 @@ export type Roadmap = {
   ownerName: string;
   itemCount: number;
   canEdit: boolean;
+  canShare: boolean;
+  canDelete: boolean;
+  isOwner: boolean;
+};
+
+export type Collaborator = {
+  userId: number;
+  name: string;
+  email: string;
+  canEdit: boolean;
+  canShare: boolean;
 };
 
 export type RoadmapInput = { name: string; description: string };
@@ -79,6 +90,17 @@ export const api = {
     req<Roadmap>(`/api/roadmaps/${id}`, { method: "PUT", body: JSON.stringify(input) }),
   deleteRoadmap: (id: number, confirmSlug: string) =>
     req<void>(`/api/roadmaps/${id}`, { method: "DELETE", body: JSON.stringify({ confirmSlug }) }),
+  listSharedRoadmaps: () => req<Roadmap[]>("/api/roadmaps/shared"),
+
+  // Colaboradores
+  listCollaborators: (roadmapId: number) =>
+    req<Collaborator[]>(`/api/roadmaps/${roadmapId}/collaborators`),
+  addCollaborator: (roadmapId: number, input: { email: string; canEdit: boolean; canShare: boolean }) =>
+    req<Collaborator>(`/api/roadmaps/${roadmapId}/collaborators`, { method: "POST", body: JSON.stringify(input) }),
+  updateCollaborator: (roadmapId: number, userId: number, input: { canEdit: boolean; canShare: boolean }) =>
+    req<Collaborator>(`/api/roadmaps/${roadmapId}/collaborators/${userId}`, { method: "PUT", body: JSON.stringify(input) }),
+  removeCollaborator: (roadmapId: number, userId: number) =>
+    req<void>(`/api/roadmaps/${roadmapId}/collaborators/${userId}`, { method: "DELETE" }),
 
   // Items (scoped by roadmap)
   listItems: (roadmapId: number) =>
