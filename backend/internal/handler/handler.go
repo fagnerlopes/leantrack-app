@@ -987,6 +987,27 @@ func (h *Handler) updateCollaborator(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "json inválido")
 		return
 	}
+	rm, err := h.Q.GetRoadmapByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "roadmap não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar roadmap")
+		return
+	}
+	if userID == rm.OwnerID {
+		writeErr(w, http.StatusBadRequest, "não é possível alterar as permissões do dono")
+		return
+	}
+	if _, err := h.Q.GetCollaborator(r.Context(), sqlc.GetCollaboratorParams{RoadmapID: id, UserID: userID}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "colaborador não encontrado")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar colaborador")
+		return
+	}
 	createdBy := actor.ID
 	row, err := h.Q.UpsertCollaborator(r.Context(), sqlc.UpsertCollaboratorParams{
 		RoadmapID: id, UserID: userID,
