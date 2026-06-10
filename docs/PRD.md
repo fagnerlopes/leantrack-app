@@ -15,6 +15,7 @@ A aplicação está evoluindo de **um único roadmap compartilhado** para **vár
 - Cada usuário pode criar **vários** roadmaps (padrão de nome `Roadmap [Produto] [Ano]`, ex.: "Roadmap VPS 2026").
 - **Todos os usuários logados veem** todos os roadmaps (modo leitura).
 - **Somente o dono** edita/apaga/reordena o próprio roadmap e seus itens.
+- **Compartilhamento com colaboradores:** o dono pode conceder a outras pessoas duas permissões **independentes** — **editar** (mexer no conteúdo: criar/alterar/reordenar/excluir iniciativas, **e renomear** o roadmap) e **compartilhar** (convidar/remover outros colaboradores e ajustar as permissões deles). É possível conceder só uma ou ambas. **Excluir o roadmap inteiro continua exclusivo do dono** — nenhum colaborador pode excluí-lo. Um colaborador com "compartilhar" pode convidar/remover colaboradores, **mas nunca o dono** (a propriedade só muda pelo dono; transferência de propriedade está fora de escopo).
 - **Admins** (3 e-mails fixos) gerenciam **contas**; quanto a roadmaps, são iguais a qualquer usuário (editam só os que criaram).
 - Não é multitenant: todos pertencem à mesma empresa; o controle é de **propriedade**, não de isolamento entre organizações.
 
@@ -29,15 +30,17 @@ Tudo é protegido por autenticação; nada é público.
 ## Funcionalidades principais
 
 ### Lista de roadmaps (`/`)
-- Tela inicial após o login, com abas **"Meus roadmaps"** (os que você criou) e **"Todos os roadmaps"** (todos da empresa, em leitura).
-- Cada roadmap aparece como um cartão com nome, dono e número de iniciativas; um selo "SEU" marca os seus.
+- Tela inicial após o login, com abas **"Meus roadmaps"** (os que você criou), **"Compartilhados comigo"** (roadmaps em que você é colaborador) e **"Todos os roadmaps"** (todos da empresa, em leitura).
+- Cada roadmap aparece como um cartão com nome, dono e número de iniciativas; um selo "SEU" marca os seus e um selo "COMPARTILHADO" marca os que outra pessoa compartilhou com você.
 - Botão **"+ Novo roadmap"** (padrão de nome `Roadmap [Produto] [Ano]`); ao criar, abre direto em modo edição.
 - Acesso ao painel **"Usuários"** apenas para administradores.
 
 ### Visualização do roadmap (`/roadmaps/{id}-{slug}`)
 - Endereçado pelo **id** (imutável); o slug é apenas enfeite legível e não quebra ao renomear.
 - **Dono:** modo edição completo — criar/editar iniciativas, arrastar para reordenar, cores, datas, link do épico, além de **renomear** e **excluir** o roadmap (exclusão confirmada digitando o slug exato).
-- **Não-dono:** modo **somente leitura**, com selo "🔒 Somente leitura — roadmap de {dono}" e sem controles de edição.
+- **Colaborador com permissão de editar:** abre o roadmap em **modo edição** (sem o selo "Somente leitura"), podendo mexer no conteúdo e renomear; **não vê o botão de excluir** (exclusão é só do dono).
+- **Não-dono sem permissão de editar:** modo **somente leitura**, com selo "🔒 Somente leitura — roadmap de {dono}" e sem controles de edição.
+- **Botão "Compartilhar":** visível ao **dono** e a quem tem permissão de compartilhar. Abre o **diálogo de colaboradores**: convidar por **e-mail** (de conta existente) definindo as permissões "Pode editar" e "Pode compartilhar"; **aviso** quando o e-mail não tem conta, orientando solicitar o cadastro a `marcus.januario@locaweb.com.br` (sem auto-cadastro); e a **lista de pessoas com acesso** (o dono aparece marcado como "Dono", sem opção de remover) com botão para **remover** colaboradores.
 - Gantt horizontal Mai/26 → Mai/27 com cabeçalho por trimestre (Q2/26 ... Q2/27).
 - Itens agrupados por status: Em andamento, Não iniciado, Concluído, Pausado.
 - Barras com cores por status; barra tracejada vermelha/amarela para itens em risco.
@@ -84,7 +87,7 @@ Tudo é protegido por autenticação; nada é público.
 
 - Auto-registro de usuários (admin cria contas).
 - Integração efetiva com Keycloak (apenas o "encaixe" é preparado — ver ADR 008).
-- Cor/área por roadmap, compartilhamento granular, comentários, histórico de versões.
+- Cor/área por roadmap, comentários, histórico de versões.
 - Isolamento multitenant entre organizações distintas.
 - Histórico de alterações (audit log).
 - Notificações por email.
