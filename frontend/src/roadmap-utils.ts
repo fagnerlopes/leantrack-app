@@ -1,3 +1,4 @@
+import { AlertTriangle, Zap, Check, type LucideIcon } from "lucide-react";
 import type { Item } from "./api";
 
 export const MONTHS = ["Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez", "Jan", "Fev", "Mar", "Abr", "Mai'27"];
@@ -49,10 +50,10 @@ export const BAR_COLORS: Record<string, string> = {
 
 export type Risk = "critico" | "alerta" | "ok" | null;
 
-export const RISK_META: Record<string, { label: string; color: string; bg: string; text: string; icon: string }> = {
-  critico: { label: "Crítico", color: "#dc2626", bg: "#fee2e2", text: "#991b1b", icon: "⚠" },
-  alerta:  { label: "Alerta",  color: "#d97706", bg: "#fef3c7", text: "#92400e", icon: "⚡" },
-  ok:      { label: "No prazo", color: "#059669", bg: "#d1fae5", text: "#065f46", icon: "✓" },
+export const RISK_META: Record<string, { label: string; color: string; bg: string; text: string; Icon: LucideIcon }> = {
+  critico: { label: "Crítico", color: "#dc2626", bg: "#fee2e2", text: "#991b1b", Icon: AlertTriangle },
+  alerta:  { label: "Alerta",  color: "#d97706", bg: "#fef3c7", text: "#92400e", Icon: Zap },
+  ok:      { label: "No prazo", color: "#059669", bg: "#d1fae5", text: "#065f46", Icon: Check },
 };
 
 export function calcRisk(item: Pick<Item, "startDate" | "extMilestone"> & { extTeam?: string | null }): Risk {

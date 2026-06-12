@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { AlertTriangle, ArrowRight, CornerDownRight, ExternalLink, Zap } from "lucide-react";
 import type { Item } from "./api";
 import {
   MONTHS, TOTAL_MONTHS, LABEL_W, TODAY_FRAC, TODAY_LABEL, QUARTERS,
@@ -14,13 +15,14 @@ type Props = {
 
 function RiskBadge({ level }: { level: "critico" | "alerta" | "ok" }) {
   const m = RISK_META[level];
+  const Icon = m.Icon;
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 3,
       fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
       background: m.bg, color: m.text, border: `1px solid ${m.color}44`,
     }}>
-      {m.icon} {m.label}
+      <Icon size={10} aria-hidden /> {m.label}
     </span>
   );
 }
@@ -83,8 +85,8 @@ function GanttBar({ item }: { item: Item }) {
         )}
         {(isCritico || isAlerta) && (
           <div style={{ position: "absolute", right: 4, top: "50%",
-            transform: "translateY(-50%)", fontSize: 11, color: "rgba(255,255,255,0.9)" }}>
-            {isCritico ? "⚠" : "⚡"}
+            transform: "translateY(-50%)", display: "flex", color: "rgba(255,255,255,0.9)" }}>
+            {isCritico ? <AlertTriangle size={12} aria-hidden /> : <Zap size={12} aria-hidden />}
           </div>
         )}
       </div>
@@ -99,13 +101,14 @@ function ExtDepTag({ item }: { item: Item }) {
   if (!hasExtDep(item)) return null;
   const risk = calcRisk(item) || "alerta";
   const rm = RISK_META[risk];
+  const Icon = rm.Icon;
   return (
     <div style={{
       marginTop: 4, padding: "4px 7px", borderRadius: 5,
       background: rm.bg, border: `1px solid ${rm.color}44`, fontSize: 9, lineHeight: 1.4,
     }}>
       <div style={{ fontWeight: 700, color: rm.text, display: "flex", alignItems: "center", gap: 3 }}>
-        {rm.icon} {item.extTeam}
+        <Icon size={10} aria-hidden /> {item.extTeam}
       </div>
       {item.extDescription && (
         <div style={{ color: rm.text, opacity: 0.85, marginTop: 1 }}>
@@ -256,19 +259,20 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                               onMouseDown={(e) => e.stopPropagation()}
                               title="Abrir épico em nova aba"
                               style={{
-                                fontSize: 11, lineHeight: 1, padding: "2px 5px",
+                                lineHeight: 1, padding: "3px 5px",
                                 borderRadius: 4, border: "1px solid #cbd5e1",
                                 background: "#f8fafc", color: "#0f172a",
                                 textDecoration: "none", cursor: "pointer",
                                 display: "inline-flex", alignItems: "center", gap: 2,
                               }}
-                            >🔗</a>
+                            ><ExternalLink size={12} aria-hidden /></a>
                           )}
                           {risk && <RiskBadge level={risk}/>}
                         </div>
                         {dep && (
-                          <div style={{ fontSize: 10, color: "#d97706", marginTop: 3 }}>
-                            ↳ {dep.title.length > 22 ? dep.title.slice(0, 22) + "…" : dep.title}
+                          <div style={{ fontSize: 10, color: "#d97706", marginTop: 3, display: "flex", alignItems: "center", gap: 3 }}>
+                            <CornerDownRight size={11} aria-hidden />
+                            <span>{dep.title.length > 22 ? dep.title.slice(0, 22) + "…" : dep.title}</span>
                           </div>
                         )}
                         {item.status === "em-andamento" ? (
@@ -281,8 +285,8 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                             </div>
                           </div>
                         ) : (
-                          <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
-                            {fmtDate(item.startDate)} → {fmtDate(item.endDate)}
+                          <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3, display: "flex", alignItems: "center", gap: 3 }}>
+                            {fmtDate(item.startDate)} <ArrowRight size={10} aria-hidden /> {fmtDate(item.endDate)}
                           </div>
                         )}
                         <ExtDepTag item={item}/>

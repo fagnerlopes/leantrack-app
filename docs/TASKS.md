@@ -161,3 +161,17 @@ ADR: 011 (busca de usuários para autocomplete do compartilhamento)
 | Regra de backup antes de publicar (CLAUDE.md) | Done | Adicionada a regra: sempre fazer backup do banco de produção antes de qualquer deploy |
 | Deploy das melhorias (ambiente `roadmap`) | Done | Publicado em https://187.45.201.251.nip.io; `GET /up` 200. Backup manual pré-deploy validado (`/data/backups/predeploy-20260612-153710.dump`, 12 tabelas) |
 | Backup automático no pipeline de deploy | Done | Passo "Backup database before deploy" em `deploy-roadmap.yml`: `pg_dump -Fc` antes do `kamal setup`, salvo em `/data/backups` + artefato `db-backup-<ts>` (90 dias); pulado no 1º deploy, bloqueante se falhar com banco existente. ADR 012; CLAUDE.md atualizado |
+
+## Sessão 12/06/2026 (tarde) — Ícones lucide-react e menu de ações do roadmap
+
+ADR: 013 (biblioteca de ícones lucide-react + menu de ações em dropdown)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Instalar `lucide-react` | Done | `lucide-react@1.18.0` em `frontend/package.json` |
+| Substituir todos os emojis/glyphs por ícones lucide | Done | `⚠`→`AlertTriangle`, `⚡`→`Zap`, `✓`→`Check`, `🔗`→`ExternalLink`, `🔒`→`Lock`, `←`→`ArrowLeft`, `→`→`ArrowRight`, `↳`→`CornerDownRight`, `×`→`X`. `RISK_META.icon` (string) virou `RISK_META.Icon` (componente `LucideIcon`) em `roadmap-utils.ts`; afeta `Gantt.tsx`. `+ Nova iniciativa` mantém o `+` ASCII (não é emoji) |
+| Componente `Toast` com ícone de check | Done | `components/Toast.tsx`; substitui os `<div>` de toast duplicados em `RoadmapView`, `Profile` e `Users` e o `✓` textual das mensagens |
+| Menu de ações em dropdown (Renomear/Compartilhar/Excluir) | Done | `components/ActionMenu.tsx`; disparado por botão de **9 pontos** (grade 3×3 em SVG — o lucide não tem equivalente exato), à direita de "Exportar PDF". Fecha por clique-fora e Esc. Itens montados conforme permissões (`canEdit`/`canShare`/`canDelete`); some quando não há nenhuma ação. Removidos os botões soltos do `AppHeader` |
+| Ajuste dos testes do RoadmapView | Done | `RoadmapView.test.tsx` agora abre o menu "Ações" antes de buscar os itens (`menuitem` Renomear/Compartilhar/Excluir roadmap); modo leitura verifica ausência do botão "Ações" |
+| Type-check + testes | Done | `tsc -b` limpo; 32/32 Vitest verdes; `go build`/`go test ./...` verdes (backend inalterado) |
+| Verificação visual (Playwright) | Done | 3 screenshots revisadas: visão geral (ícones de risco, chips, setas, link de épico), menu de 9 pontos aberto, modal com X de fechar |

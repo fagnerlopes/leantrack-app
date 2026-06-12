@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { AlertTriangle, ArrowLeft, Lock, Pencil, Share2, Trash2, Zap } from "lucide-react";
 import { api } from "../api";
 import type { Item, ItemInput, Roadmap, RoadmapInput } from "../api";
 import AppHeader from "../components/AppHeader";
@@ -7,6 +8,8 @@ import ShareDialog from "../components/ShareDialog";
 import Gantt from "../Gantt";
 import RoadmapLegend from "../components/RoadmapLegend";
 import ItemModal from "../ItemModal";
+import ActionMenu, { type ActionItem } from "../components/ActionMenu";
+import Toast from "../components/Toast";
 import { QUARTERS, calcRisk, dateToFractional } from "../roadmap-utils";
 import { parseRoadmapId } from "../roadmap-path";
 
@@ -63,11 +66,11 @@ export default function RoadmapView() {
       if (id) {
         const updated = await api.updateItem(roadmapId, id, input);
         setItems(prev => prev.map(i => i.id === id ? updated : i));
-        showToast("Atualizado ✓");
+        showToast("Atualizado");
       } else {
         const created = await api.createItem(roadmapId, input);
         setItems(prev => [...prev, created]);
-        showToast("Criado ✓");
+        showToast("Criado");
       }
       setEditing(null); setCreating(false);
     } catch (e: any) { alert(e.message); }
@@ -121,6 +124,12 @@ export default function RoadmapView() {
   const alertCount = items.filter(i => calcRisk(i) === "alerta").length;
   const slugForFile = roadmap?.slug || "roadmap";
 
+  // Ações do roadmap reunidas no menu suspenso ao lado de "Exportar PDF".
+  const actionItems: ActionItem[] = [];
+  if (canEdit) actionItems.push({ label: "Renomear", Icon: Pencil, onClick: () => setRenaming(true) });
+  if (canShare) actionItems.push({ label: "Compartilhar", Icon: Share2, onClick: () => setSharing(true) });
+  if (canDelete) actionItems.push({ label: "Excluir roadmap", Icon: Trash2, onClick: () => setDeleting(true), danger: true });
+
   async function exportPNG() {
     if (!ganttRef.current) return;
     const { toPng } = await import("html-to-image");
@@ -149,7 +158,7 @@ export default function RoadmapView() {
     const updated = await api.updateRoadmap(roadmapId, input);
     setRoadmap(updated);
     setRenaming(false);
-    showToast("Roadmap atualizado ✓");
+    showToast("Roadmap atualizado");
   }
 
   async function handleDeleteRoadmap(confirmSlug: string) {
@@ -162,7 +171,7 @@ export default function RoadmapView() {
   if (err) return (
     <div style={{ padding: 40 }}>
       <div style={{ color: "#991b1b", marginBottom: 16 }}>{err}</div>
-      <Link to="/" style={btnLight}>← Voltar</Link>
+      <Link to="/" style={{ ...btnLight, display: "inline-flex", alignItems: "center", gap: 6 }}><ArrowLeft size={14} aria-hidden /> Voltar</Link>
     </div>
   );
 
@@ -174,20 +183,12 @@ export default function RoadmapView() {
         subtitle={`${roadmap?.ownerName} · ${items.length} ${items.length === 1 ? "iniciativa" : "iniciativas"}`}
         actions={
           <>
-            {blockedCount > 0 && <span style={chipStyle("#fee2e2", "#991b1b", "#fca5a5")}>⚠ {blockedCount} crítico{blockedCount > 1 ? "s" : ""}</span>}
-            {alertCount > 0 && <span style={chipStyle("#fef3c7", "#92400e", "#fcd34d")}>⚡ {alertCount} alerta{alertCount > 1 ? "s" : ""}</span>}
+            {blockedCount > 0 && <span style={chipStyle("#fee2e2", "#991b1b", "#fca5a5")}><AlertTriangle size={12} aria-hidden /> {blockedCount} crítico{blockedCount > 1 ? "s" : ""}</span>}
+            {alertCount > 0 && <span style={chipStyle("#fef3c7", "#92400e", "#fcd34d")}><Zap size={12} aria-hidden /> {alertCount} alerta{alertCount > 1 ? "s" : ""}</span>}
             {canEdit ? (
-              <>
-                <button onClick={() => setCreating(true)} style={btnAccent}>+ Nova iniciativa</button>
-                <button onClick={() => setRenaming(true)} style={btnLight}>Renomear</button>
-                {canShare && <button onClick={() => setSharing(true)} style={btnLight}>Compartilhar</button>}
-                {canDelete && <button onClick={() => setDeleting(true)} style={btnDanger}>Excluir roadmap</button>}
-              </>
+              <button onClick={() => setCreating(true)} style={btnAccent}>+ Nova iniciativa</button>
             ) : (
-              <>
-                <span style={readOnlyBadge}>🔒 Somente leitura — roadmap de {roadmap?.ownerName}</span>
-                {canShare && <button onClick={() => setSharing(true)} style={btnLight}>Compartilhar</button>}
-              </>
+              <span style={readOnlyBadge}><Lock size={13} aria-hidden /> Somente leitura — roadmap de {roadmap?.ownerName}</span>
             )}
           </>
         }
@@ -205,9 +206,10 @@ export default function RoadmapView() {
           <input type="checkbox" checked={riskOnly} onChange={e => setRiskOnly(e.target.checked)} />
           Apenas em risco
         </label>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <button onClick={exportPNG} style={btnPrimaryOutline}>Exportar PNG</button>
           <button onClick={exportPDF} style={btnPrimary}>Exportar PDF</button>
+          <ActionMenu items={actionItems} />
         </div>
       </div>
 
@@ -264,9 +266,7 @@ export default function RoadmapView() {
         <ShareDialog roadmapId={roadmap.id} onClose={() => setSharing(false)} />
       )}
 
-      {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, background: "#0f172a", color: "#fff", padding: "10px 18px", borderRadius: 10, fontSize: 13, fontWeight: 500, zIndex: 9999 }}>{toast}</div>
-      )}
+      {toast && <Toast message={toast} />}
     </div>
   );
 }
@@ -354,10 +354,11 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
 }
 
 function chipStyle(bg: string, color: string, border: string): React.CSSProperties {
-  return { fontSize: 11, fontWeight: 700, background: bg, color, padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}` };
+  return { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, background: bg, color, padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}` };
 }
 
 const readOnlyBadge: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6,
   fontSize: 12, fontWeight: 600, background: "#1e293b", color: "#cbd5e1",
   padding: "6px 12px", borderRadius: 8, border: "1px solid #334155",
 };

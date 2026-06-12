@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import type { Item, ItemInput } from "./api";
 import { STATUS_META, BAR_COLORS } from "./roadmap-utils";
 
@@ -61,7 +62,7 @@ export default function ItemModal({ initial, allItems, isNew, onClose, onSave, o
       <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 520, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,0.18)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{isNew ? "Nova iniciativa" : "Editar iniciativa"}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8" }}>×</button>
+          <button onClick={onClose} aria-label="Fechar" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: 2 }}><X size={22} aria-hidden /></button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div><label style={lbl}>Título *</label><input style={inp} value={f.title} onChange={e => set("title", e.target.value)}/></div>

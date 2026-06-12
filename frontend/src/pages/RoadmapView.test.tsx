@@ -46,24 +46,30 @@ describe("RoadmapView", () => {
     renderView();
     await waitFor(() => expect(screen.getByText(/Somente leitura/)).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "+ Nova iniciativa" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Excluir roadmap" })).not.toBeInTheDocument();
+    // Sem permissões de edição/compartilhamento/exclusão, o menu de ações nem aparece.
+    expect(screen.queryByRole("button", { name: "Ações" })).not.toBeInTheDocument();
   });
 
   it("mostra controles de edição quando o usuário é o dono", async () => {
     getRoadmap.mockResolvedValue({ ...base, ...ownerPerms });
     renderView();
     await waitFor(() => expect(screen.getByRole("button", { name: "+ Nova iniciativa" })).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Excluir roadmap" })).toBeInTheDocument();
     expect(screen.queryByText(/Somente leitura/)).not.toBeInTheDocument();
+    // As ações do roadmap ficam dentro do menu suspenso ao lado de "Exportar PDF".
+    await userEvent.click(screen.getByRole("button", { name: "Ações" }));
+    expect(screen.getByRole("menuitem", { name: "Renomear" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Compartilhar" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Excluir roadmap" })).toBeInTheDocument();
   });
 
   it("habilita o botão de exclusão somente quando o slug digitado confere", async () => {
     getRoadmap.mockResolvedValue({ ...base, ...ownerPerms });
     deleteRoadmap.mockResolvedValue(undefined);
     renderView();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Excluir roadmap" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "+ Nova iniciativa" })).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("button", { name: "Excluir roadmap" }));
+    await userEvent.click(screen.getByRole("button", { name: "Ações" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Excluir roadmap" }));
     const confirmBtn = screen.getByRole("button", { name: "Excluir" });
     expect(confirmBtn).toBeDisabled();
 

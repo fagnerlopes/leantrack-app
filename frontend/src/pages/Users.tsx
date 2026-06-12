@@ -3,6 +3,7 @@ import { api } from "../api";
 import type { AdminUser } from "../api";
 import { useAuth } from "../auth";
 import AppHeader from "../components/AppHeader";
+import Toast from "../components/Toast";
 
 export default function Users() {
   const { user } = useAuth();
@@ -23,14 +24,14 @@ export default function Users() {
     const u = await api.createUser(input);
     setUsers(prev => [...prev, u]);
     setCreating(false);
-    showToast("Usuário criado ✓");
+    showToast("Usuário criado");
   }
 
   async function handleRole(u: AdminUser, role: string) {
     try {
       const updated = await api.updateUserRole(u.id, role);
       setUsers(prev => prev.map(x => x.id === u.id ? updated : x));
-      showToast("Papel atualizado ✓");
+      showToast("Papel atualizado");
     } catch (e: any) { alert(e.message); }
   }
 
@@ -94,9 +95,7 @@ export default function Users() {
 
       {creating && <CreateUserModal onClose={() => setCreating(false)} onCreate={handleCreate} />}
 
-      {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, background: "#0f172a", color: "#fff", padding: "10px 18px", borderRadius: 10, fontSize: 13, fontWeight: 500, zIndex: 9999 }}>{toast}</div>
-      )}
+      {toast && <Toast message={toast} />}
     </div>
   );
 }

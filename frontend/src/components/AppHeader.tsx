@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import UserMenu from "./UserMenu";
 
 // AppHeader é o cabeçalho padrão de todas as rotas autenticadas:
@@ -43,8 +44,8 @@ function BackButton({ to, label }: { to: string; label: string }) {
       onMouseLeave={() => setHover(false)}
       style={{ ...backBtn, ...(hover ? backBtnHover : null) }}
     >
-      <span style={{ fontSize: 16, lineHeight: 1, transform: hover ? "translateX(-2px)" : "none", transition: "transform 120ms" }} aria-hidden>
-        ←
+      <span style={{ display: "inline-flex", lineHeight: 1, transform: hover ? "translateX(-2px)" : "none", transition: "transform 120ms" }} aria-hidden>
+        <ArrowLeft size={16} />
       </span>
       <span>{label}</span>
     </Link>

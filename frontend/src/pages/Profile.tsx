@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import AppHeader from "../components/AppHeader";
+import Toast from "../components/Toast";
 
 export default function Profile() {
   const { user, updateUser } = useAuth();
@@ -29,7 +30,7 @@ export default function Profile() {
       updateUser(updated);
       const changedPwd = !!password;
       setPassword(""); setConfirm(""); setShow(false);
-      showToast(changedPwd ? "Perfil e senha atualizados ✓" : "Perfil atualizado ✓");
+      showToast(changedPwd ? "Perfil e senha atualizados" : "Perfil atualizado");
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -96,9 +97,7 @@ export default function Profile() {
         </form>
       </div>
 
-      {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, background: "#0f172a", color: "#fff", padding: "10px 18px", borderRadius: 10, fontSize: 13, fontWeight: 500, zIndex: 9999 }}>{toast}</div>
-      )}
+      {toast && <Toast message={toast} />}
     </div>
   );
 }
