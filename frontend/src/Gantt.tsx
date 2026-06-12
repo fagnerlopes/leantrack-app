@@ -316,7 +316,16 @@ export default function Gantt({ items, timeline, onSelect, onReorder, innerRef }
                       }}
                       onClick={() => onSelect && onSelect(item)}
                     >
-                      <div style={{
+                      <div
+                        {...(onReorder ? { draggable: true, "data-reorder-handle": "" } : {})}
+                        onDragStart={onReorder ? (e) => {
+                          draggingId.current = item.id;
+                          draggingStatus.current = item.status;
+                          e.dataTransfer.effectAllowed = "move";
+                        } : undefined}
+                        onDragEnd={onReorder ? () => { draggingId.current = null; draggingStatus.current = null; setDragOverId(null); } : undefined}
+                        title={onReorder ? "Arraste o título para reordenar" : undefined}
+                        style={{
                         width: LABEL_W, minWidth: LABEL_W,
                         padding: "10px 14px", borderRight: "1px solid #e2e8f0",
                         borderLeft: risk === "critico" ? "3px solid #dc2626"
@@ -324,21 +333,13 @@ export default function Gantt({ items, timeline, onSelect, onReorder, innerRef }
                                   : "3px solid transparent",
                         display: "flex", gap: 6, alignItems: "flex-start",
                         position: "sticky", left: 0, zIndex: 20, background: rowBg,
+                        cursor: onReorder ? "grab" : undefined,
                       }}>
                         {onReorder && (
                           <span
-                            data-reorder-handle
-                            draggable
-                            onDragStart={(e) => {
-                              draggingId.current = item.id;
-                              draggingStatus.current = item.status;
-                              e.dataTransfer.effectAllowed = "move";
-                            }}
-                            onDragEnd={() => { draggingId.current = null; draggingStatus.current = null; setDragOverId(null); }}
-                            onClick={(e) => e.stopPropagation()}
-                            title="Arraste para reordenar"
-                            style={{ cursor: "grab", color: "#cbd5e1", marginTop: 1, flexShrink: 0, display: "inline-flex" }}
-                          ><GripVertical size={14} aria-hidden /></span>
+                            aria-hidden
+                            style={{ color: "#cbd5e1", marginTop: 1, flexShrink: 0, display: "inline-flex" }}
+                          ><GripVertical size={14} /></span>
                         )}
                         <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 4 }}>

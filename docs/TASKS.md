@@ -196,3 +196,9 @@ ADR: 014 (timeline dinâmica derivada das datas das iniciativas)
 |------|--------|-------|
 | Pan não tinha o que arrastar em telas largas | Done | Largura mínima da coluna de mês 64px→110px (`COL_MIN_PX` no `Gantt.tsx`): períodos longos transbordam e ficam arrastáveis; curtos continuam preenchendo a largura (flex). Verificado em 1920px: scrollWidth 2540 > 1870, arrastar revela o início (Out'25) |
 | Reordenar por arrastar não refletia na tela (bug pré-existente) | Done | `handleReorder` só trocava `sortOrder` sem reordenar o array; como o Gantt renderiza na ordem do array, só mudava após recarregar. Extraída `applyReorder()` (pura, reordena + reatribui sort_order em passos de 10, espelha `ORDER BY sort_order, id` do backend) com 3 testes; verificado via DnD nativo: "Lançamento GA" sobe acima de "Nova arquitetura" na hora |
+
+### Conflito pan × reordenar (mesma sessão)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Reordenar só pela célula do título (sem conflito com o pan) | Done | A célula do título virou o puxador (`draggable` + `data-reorder-handle`), excluída do pan via `isInteractive`; o ícone ⋮⋮ ficou só como pista visual. Arrastar o título reordena; arrastar o gráfico navega no tempo. Verificado por DnD nativo: ordem do grupo "Não iniciado" muda na hora; pan segue funcionando (scrollLeft 215→0) |

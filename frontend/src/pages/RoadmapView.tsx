@@ -232,7 +232,7 @@ export default function RoadmapView() {
         )}
         {items.length > 0 && (
           <div style={{ marginTop: 10, fontSize: 11, color: "#94a3b8" }}>
-            Dica: arraste a timeline para navegar no tempo{canEdit ? " · arraste o ícone ⋮⋮ para reordenar dentro do mesmo status · clique para editar" : ""}.
+            Dica: arraste a timeline para navegar no tempo{canEdit ? " · arraste o título da iniciativa para reordenar dentro do mesmo status · clique para editar" : ""}.
           </div>
         )}
       </div>

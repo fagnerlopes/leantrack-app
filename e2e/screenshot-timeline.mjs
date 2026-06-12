@@ -30,19 +30,16 @@ if (box) {
 console.log("após arrastar p/ a direita:", await metrics());
 await p.screenshot({ path: "/tmp/timeline-arrastada.png", fullPage: true });
 
-// 3) Reordenação (drag-and-drop nativo HTML5) dentro do status "Não iniciado".
-const titlesNaoIniciado = async () => p.evaluate(() => {
-  // textos das iniciativas, na ordem em que aparecem no DOM
-  return [...document.querySelectorAll('div')].filter(d => /^(Nova arquitetura|Lançamento GA)/.test(d.textContent || "") && d.querySelector('span[title="Arraste para reordenar"]') == null && d.offsetParent)
-    .map(d => (d.textContent || "").slice(0, 18));
-});
-const grips = await p.locator('span[title="Arraste para reordenar"]').elementHandles();
+// 3) Reordenação (drag-and-drop nativo HTML5) arrastando a CÉLULA DO TÍTULO,
+//    dentro do status "Não iniciado".
+const handles = await p.locator('[data-reorder-handle]').elementHandles();
 // índices na ordem de render: 0 Migração · 1 Nova arquitetura · 2 Lançamento GA · 3 Fundação
-const ordemAntes = await p.locator('span[title="Arraste para reordenar"]').evaluateAll(
-  els => els.map(e => (e.closest('div[style*="sticky"]')?.textContent || "").replace(/Crítico.*/, "").slice(0, 16))
+const readOrder = () => p.locator('[data-reorder-handle]').evaluateAll(
+  els => els.map(e => (e.textContent || "").replace(/Crítico.*/, "").slice(0, 16))
 );
-console.log("ordem dos puxadores ANTES:", ordemAntes);
+console.log("ordem das iniciativas ANTES:", await readOrder());
 
+const grips = handles;
 if (grips.length >= 3) {
   await p.evaluate(([src, tgt]) => {
     const dt = new DataTransfer();
@@ -54,10 +51,7 @@ if (grips.length >= 3) {
   }, [grips[2], grips[1]]); // arrasta "Lançamento GA" para cima de "Nova arquitetura"
   await p.waitForTimeout(500);
 }
-const ordemDepois = await p.locator('span[title="Arraste para reordenar"]').evaluateAll(
-  els => els.map(e => (e.closest('div[style*="sticky"]')?.textContent || "").replace(/Crítico.*/, "").slice(0, 16))
-);
-console.log("ordem dos puxadores DEPOIS:", ordemDepois);
+console.log("ordem das iniciativas DEPOIS:", await readOrder());
 await p.screenshot({ path: "/tmp/timeline-reordenado.png", fullPage: true });
 
 await ctx.close();

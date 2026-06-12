@@ -26,9 +26,10 @@ Uma única função `buildTimeline(items)` em `roadmap-utils.ts` devolve um obje
   `totalMonths` é múltiplo de 3 e o cabeçalho de trimestres fica inteiro.
 - **Sem datas:** fallback para um intervalo em torno de hoje.
 - **Navegação:** "arrastar com o mouse" (pan via pointer events) na área do
-  gráfico, além da barra de rolagem. O puxador de reordenação migrou da linha
-  inteira para um ícone (`GripVertical`) na coluna do nome, liberando a área do
-  gráfico para o pan sem conflitar com o drag nativo do HTML5. Cada coluna de mês
+  gráfico, além da barra de rolagem. O puxador de reordenação é a **célula do
+  título** (coluna da esquerda), marcada com `data-reorder-handle` e excluída do
+  pan — assim arrastar o título reordena e arrastar o gráfico navega no tempo,
+  sem conflito (o ícone `GripVertical` é apenas pista visual). Cada coluna de mês
   tem largura mínima de 110px (`COL_MIN_PX`): períodos longos transbordam e
   ficam arrastáveis; períodos curtos preenchem a largura disponível (flex), sem
   espaço vazio.
