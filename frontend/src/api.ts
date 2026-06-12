@@ -22,6 +22,12 @@ export type Collaborator = {
   canShare: boolean;
 };
 
+export type UserSuggestion = {
+  id: number;
+  name: string;
+  email: string;
+};
+
 export type RoadmapInput = { name: string; description: string };
 
 export type AdminUser = {
@@ -93,6 +99,8 @@ export const api = {
   listSharedRoadmaps: () => req<Roadmap[]>("/api/roadmaps/shared"),
 
   // Colaboradores
+  searchUsers: (roadmapId: number, q: string) =>
+    req<UserSuggestion[]>(`/api/roadmaps/${roadmapId}/user-search?q=${encodeURIComponent(q)}`),
   listCollaborators: (roadmapId: number) =>
     req<Collaborator[]>(`/api/roadmaps/${roadmapId}/collaborators`),
   addCollaborator: (roadmapId: number, input: { email: string; canEdit: boolean; canShare: boolean }) =>

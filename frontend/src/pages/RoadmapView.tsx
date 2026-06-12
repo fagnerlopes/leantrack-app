@@ -5,6 +5,7 @@ import type { Item, ItemInput, Roadmap, RoadmapInput } from "../api";
 import AppHeader from "../components/AppHeader";
 import ShareDialog from "../components/ShareDialog";
 import Gantt from "../Gantt";
+import RoadmapLegend from "../components/RoadmapLegend";
 import ItemModal from "../ItemModal";
 import { QUARTERS, calcRisk, dateToFractional } from "../roadmap-utils";
 import { parseRoadmapId } from "../roadmap-path";
@@ -166,7 +167,7 @@ export default function RoadmapView() {
   );
 
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <AppHeader
         back={{ to: "/", label: "Roadmaps" }}
         title={roadmap?.name}
@@ -210,7 +211,7 @@ export default function RoadmapView() {
         </div>
       </div>
 
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: 24, flex: 1 }}>
         {items.length === 0 ? (
           <div style={{ color: "#94a3b8", padding: "40px 0", textAlign: "center" }}>
             {canEdit ? 'Nenhuma iniciativa ainda. Clique em "+ Nova iniciativa".' : "Este roadmap ainda não tem iniciativas."}
@@ -229,6 +230,8 @@ export default function RoadmapView() {
           </div>
         )}
       </div>
+
+      <RoadmapLegend />
 
       {(editing || creating) && (
         <ItemModal

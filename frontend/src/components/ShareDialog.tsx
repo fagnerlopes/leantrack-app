@@ -1,6 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { api } from "../api";
-import type { Collaborator } from "../api";
+import type { Collaborator, UserSuggestion } from "../api";
+
+// Dispara a busca de usuários só a partir deste nº de caracteres.
+const SEARCH_MIN_CHARS = 4;
 
 export default function ShareDialog({ roadmapId, onClose }: { roadmapId: number; onClose: () => void }) {
   const [collabs, setCollabs] = useState<Collaborator[]>([]);
@@ -10,6 +13,11 @@ export default function ShareDialog({ roadmapId, onClose }: { roadmapId: number;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
+  const [showSug, setShowSug] = useState(false);
+  const [searching, setSearching] = useState(false);
+  // Evita reabrir o dropdown logo após escolher uma sugestão.
+  const skipNextSearch = useRef(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -20,6 +28,28 @@ export default function ShareDialog({ roadmapId, onClose }: { roadmapId: number;
   }, [roadmapId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Autocomplete: busca usuários conforme o usuário digita (com debounce).
+  useEffect(() => {
+    if (skipNextSearch.current) { skipNextSearch.current = false; return; }
+    const q = email.trim();
+    if (q.length < SEARCH_MIN_CHARS) { setSuggestions([]); setShowSug(false); return; }
+    setSearching(true);
+    const t = setTimeout(() => {
+      api.searchUsers(roadmapId, q)
+        .then(rows => { setSuggestions(rows); setShowSug(true); })
+        .catch(() => { setSuggestions([]); setShowSug(false); })
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [email, roadmapId]);
+
+  function pickSuggestion(u: UserSuggestion) {
+    skipNextSearch.current = true;
+    setEmail(u.email);
+    setShowSug(false);
+    setSuggestions([]);
+  }
 
   async function invite() {
     const e = email.trim().toLowerCase();
@@ -32,6 +62,8 @@ export default function ShareDialog({ roadmapId, onClose }: { roadmapId: number;
         return [...others, created].sort((a, b) => a.name.localeCompare(b.name));
       });
       setEmail("");
+      setSuggestions([]);
+      setShowSug(false);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -57,13 +89,43 @@ export default function ShareDialog({ roadmapId, onClose }: { roadmapId: number;
         </div>
 
         <label style={lbl}>E-mail do convidado</label>
-        <input
-          aria-label="e-mail do convidado"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          placeholder="pessoa@empresa.com.br"
-          style={input}
-        />
+        <div style={{ position: "relative" }}>
+          <input
+            aria-label="e-mail do convidado"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            onFocus={() => { if (suggestions.length > 0) setShowSug(true); }}
+            onBlur={() => setTimeout(() => setShowSug(false), 150)}
+            placeholder="Digite nome ou e-mail (mín. 4 letras)"
+            autoComplete="off"
+            style={input}
+          />
+          {showSug && (
+            <ul role="listbox" style={dropdown}>
+              {suggestions.length === 0 ? (
+                <li style={{ ...sugItem, color: "#94a3b8", cursor: "default" }}>
+                  {searching ? "Buscando…" : "Nenhum usuário encontrado"}
+                </li>
+              ) : (
+                suggestions.map(u => (
+                  <li
+                    key={u.id}
+                    role="option"
+                    aria-selected={false}
+                    // onMouseDown (não onClick) para disparar antes do onBlur do input.
+                    onMouseDown={() => pickSuggestion(u)}
+                    style={sugItem}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#f1f5f9")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{u.name}</div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>{u.email}</div>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </div>
 
         <div style={{ display: "flex", gap: 18, marginTop: 12 }}>
           <label style={chk}>
@@ -125,6 +187,15 @@ const lbl: React.CSSProperties = {
 const input: React.CSSProperties = {
   width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0",
   fontSize: 14, outline: "none", background: "#f8fafc", color: "#0f172a", boxSizing: "border-box",
+};
+const dropdown: React.CSSProperties = {
+  position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10,
+  margin: 0, padding: 4, listStyle: "none", background: "#fff",
+  border: "1px solid #e2e8f0", borderRadius: 8, boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+  maxHeight: 220, overflowY: "auto",
+};
+const sugItem: React.CSSProperties = {
+  padding: "8px 10px", borderRadius: 6, cursor: "pointer",
 };
 const chk: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#0f172a", cursor: "pointer" };
 const row: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f1f5f9" };

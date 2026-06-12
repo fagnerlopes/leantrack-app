@@ -236,6 +236,53 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 	return items, nil
 }
 
+const searchUsersForRoadmap = `-- name: SearchUsersForRoadmap :many
+SELECT u.id, u.email, u.name
+FROM users u
+WHERE (u.email ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%')
+  AND u.id <> (SELECT r.owner_id FROM roadmaps r WHERE r.id = $2)
+  AND NOT EXISTS (
+    SELECT 1 FROM roadmap_collaborators rc
+    WHERE rc.roadmap_id = $2 AND rc.user_id = u.id
+  )
+ORDER BY u.name ASC
+LIMIT 10
+`
+
+type SearchUsersForRoadmapParams struct {
+	Query     *string `json:"query"`
+	RoadmapID int64   `json:"roadmap_id"`
+}
+
+type SearchUsersForRoadmapRow struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+// SearchUsersForRoadmap alimenta o autocomplete do compartilhamento: busca por
+// e-mail OU nome, excluindo o dono e quem já é colaborador do roadmap.
+// O parâmetro @query já chega com os curingas LIKE escapados pelo handler.
+func (q *Queries) SearchUsersForRoadmap(ctx context.Context, arg SearchUsersForRoadmapParams) ([]SearchUsersForRoadmapRow, error) {
+	rows, err := q.db.Query(ctx, searchUsersForRoadmap, arg.Query, arg.RoadmapID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchUsersForRoadmapRow
+	for rows.Next() {
+		var i SearchUsersForRoadmapRow
+		if err := rows.Scan(&i.ID, &i.Email, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setInitialAdminPasswords = `-- name: SetInitialAdminPasswords :exec
 UPDATE users
 SET password_hash = $1

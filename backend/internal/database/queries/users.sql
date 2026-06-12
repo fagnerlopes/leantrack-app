@@ -45,6 +45,21 @@ RETURNING id, email, name, role, auth_provider, created_at;
 -- name: CountAdmins :one
 SELECT COUNT(*) FROM users WHERE role = 'admin';
 
+-- SearchUsersForRoadmap alimenta o autocomplete do compartilhamento: busca por
+-- e-mail OU nome, excluindo o dono e quem já é colaborador do roadmap.
+-- O parâmetro @query já chega com os curingas LIKE escapados pelo handler.
+-- name: SearchUsersForRoadmap :many
+SELECT u.id, u.email, u.name
+FROM users u
+WHERE (u.email ILIKE '%' || @query || '%' OR u.name ILIKE '%' || @query || '%')
+  AND u.id <> (SELECT r.owner_id FROM roadmaps r WHERE r.id = @roadmap_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM roadmap_collaborators rc
+    WHERE rc.roadmap_id = @roadmap_id AND rc.user_id = u.id
+  )
+ORDER BY u.name ASC
+LIMIT 10;
+
 -- UpdateOwnName altera o nome da própria conta do usuário logado.
 -- name: UpdateOwnName :one
 UPDATE users SET name = $2 WHERE id = $1

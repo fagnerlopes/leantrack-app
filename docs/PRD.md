@@ -41,10 +41,11 @@ Tudo é protegido por autenticação; nada é público.
 - **Colaborador com permissão de editar:** abre o roadmap em **modo edição** (sem o selo "Somente leitura"), podendo mexer no conteúdo e renomear; **não vê o botão de excluir** (exclusão é só do dono).
 - **Não-dono sem permissão de editar:** modo **somente leitura**, com selo "🔒 Somente leitura — roadmap de {dono}" e sem controles de edição.
 - **Botão "Compartilhar":** visível ao **dono** e a quem tem permissão de compartilhar. Abre o **diálogo de colaboradores**: convidar por **e-mail** (de conta existente) definindo as permissões "Pode editar" e "Pode compartilhar"; **aviso** quando o e-mail não tem conta, orientando solicitar o cadastro a `marcus.januario@locaweb.com.br` (sem auto-cadastro); e a **lista de pessoas com acesso** (o dono aparece marcado como "Dono", sem opção de remover) com botão para **remover** colaboradores.
+  - **Autocomplete do convite:** ao digitar **4 ou mais caracteres** no campo de e-mail, o sistema sugere usuários cujo **e-mail ou nome** casam com o texto, exibindo nome + e-mail. Quem já tem acesso (o dono e colaboradores atuais) **não aparece** nas sugestões. Escolher uma sugestão preenche o campo automaticamente.
 - Gantt horizontal Mai/26 → Mai/27 com cabeçalho por trimestre (Q2/26 ... Q2/27).
 - Itens agrupados por status: Em andamento, Não iniciado, Concluído, Pausado.
 - Barras com cores por status; barra tracejada vermelha/amarela para itens em risco.
-- Indicador "Hoje" (25 Mai 2026 — data de referência do roadmap).
+- Indicador "Hoje": linha vermelha e badge posicionados pela **data atual** (calculada em tempo de execução), enquanto a data cair dentro da janela Mai/26 → Mai/27.
 - Marcos externos como losangos coloridos no track temporal.
 - Cálculo automático de risco: **Crítico** (marco depois do início → bloqueio), **Alerta** (marco até 14 dias antes do início), **No prazo** (marco com folga).
 - Filtros: por status, por trimestre, apenas em risco.

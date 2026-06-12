@@ -115,6 +115,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("DELETE /api/roadmaps/{id}/items/{itemId}", authM(editorM(http.HandlerFunc(h.deleteRoadmapItem))))
 
 	// Colaboradores escopados por roadmap (gestão por quem pode compartilhar).
+	mux.Handle("GET /api/roadmaps/{id}/user-search", authM(sharerM(http.HandlerFunc(h.searchUsers))))
 	mux.Handle("GET /api/roadmaps/{id}/collaborators", authM(sharerM(http.HandlerFunc(h.listCollaborators))))
 	mux.Handle("POST /api/roadmaps/{id}/collaborators", authM(sharerM(http.HandlerFunc(h.addCollaborator))))
 	mux.Handle("PUT /api/roadmaps/{id}/collaborators/{userId}", authM(sharerM(http.HandlerFunc(h.updateCollaborator))))
@@ -897,6 +898,45 @@ type collaboratorDTO struct {
 	Email    string `json:"email"`
 	CanEdit  bool   `json:"canEdit"`
 	CanShare bool   `json:"canShare"`
+}
+
+type userSearchDTO struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// likeEscaper escapa os curingas do LIKE/ILIKE para que caracteres digitados
+// pelo usuário (% _ \) sejam tratados como texto literal na busca.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// searchUsers alimenta o autocomplete do campo de e-mail no compartilhamento.
+// Espelha o gatilho do frontend: a busca só roda a partir de 4 caracteres.
+func (h *Handler) searchUsers(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len([]rune(q)) < 4 {
+		writeJSON(w, http.StatusOK, []userSearchDTO{})
+		return
+	}
+	esc := likeEscaper.Replace(q)
+	rows, err := h.Q.SearchUsersForRoadmap(r.Context(), sqlc.SearchUsersForRoadmapParams{
+		Query: &esc, RoadmapID: id,
+	})
+	if err != nil {
+		slog.Error("search users", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao buscar usuários")
+		return
+	}
+	out := make([]userSearchDTO, 0, len(rows))
+	for _, u := range rows {
+		out = append(out, userSearchDTO{ID: u.ID, Name: u.Name, Email: u.Email})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) listCollaborators(w http.ResponseWriter, r *http.Request) {

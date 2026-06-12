@@ -146,3 +146,16 @@ Spec: `docs/superpowers/specs/2026-06-10-compartilhamento-de-roadmaps-design.md`
 | Diálogo de compartilhamento (`RoadmapView`) | Done | Botão "Compartilhar" (visível ao dono e a quem tem `can_share`); convidar por e-mail com chaves "Pode editar"/"Pode compartilhar", lista de acesso (dono marcado, sem remover) e remoção; exclusão gated por `canDelete`; colaborador `can_edit` entra em modo edição |
 | Testes Go + Vitest | Done | Matriz de autorização (dono/editor/sharer/leitor/estranho), convite com e-mail inexistente, bloqueio de remoção do dono, upsert, listagem "compartilhados comigo"; Vitest: aba, diálogo, botão excluir oculto p/ não-dono, modo edição p/ colaborador |
 | Documentação (PRD, ADR 010, TASKS) | Done | PRD: modelo de propriedade + permissões editar/compartilhar, aba "Compartilhados comigo" + selo, botão "Compartilhar" e diálogo, removido "compartilhamento granular" do fora de escopo |
+
+## Sessão 12/06/2026 — Marcador "Hoje" dinâmico, legenda no rodapé e autocomplete de e-mail
+
+ADR: 011 (busca de usuários para autocomplete do compartilhamento)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Marcador "Hoje" calculado em runtime | Done | `roadmap-utils.ts`: `fractionalForDate`/`labelForDate` (puras) + `TODAY_FRAC`/`TODAY_LABEL`; antes o badge estava fixo em "25 Mai 2026". `Gantt.tsx` usa `TODAY_LABEL`. Verificado: badge mostra "Hoje · 12 Jun 2026" com a linha vermelha em junho |
+| Legenda fixa no rodapé da página | Done | Extraída para `components/RoadmapLegend.tsx`; `RoadmapView` virou coluna flex (`minHeight:100vh`), conteúdo `flex:1` empurra a legenda para a base. Resolve a legenda "no meio da tela" em roadmaps com poucas/nenhuma iniciativa. Observação: como saiu do card do Gantt, a legenda não vai mais no PNG/PDF exportado |
+| Autocomplete no campo de e-mail (compartilhamento) | Done | Busca a partir de 4 caracteres (debounce 250ms) por e-mail **ou** nome; oculta dono e colaboradores atuais. Backend: query `SearchUsersForRoadmap` + `GET /api/roadmaps/{id}/user-search?q=` (gated por `can_share`), curingas LIKE escapados. Frontend: dropdown nome+e-mail no `ShareDialog`, clique preenche o campo |
+| Testes Go + Vitest | Done | Go `TestSearchUsersForRoadmap`: 403 sem `can_share`, vazio com <4 chars, casa e-mail/nome, exclui dono e colaboradores. Vitest: não busca com <4 chars, sugere a partir de 4 e preenche ao escolher. `go test` verde; `tsc -b` ok; 32+ testes Vitest verdes |
+| Verificação visual (Playwright) | Done | 3 screenshots revisadas: badge "Hoje" dinâmico, legenda no rodapé com 0 iniciativas, dropdown de autocomplete |
+| Regra de backup antes de publicar (CLAUDE.md) | Done | Adicionada a regra: sempre fazer backup do banco de produção antes de qualquer deploy |

@@ -3,7 +3,27 @@ import type { Item } from "./api";
 export const MONTHS = ["Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez", "Jan", "Fev", "Mar", "Abr", "Mai'27"];
 export const TOTAL_MONTHS = 13;
 export const LABEL_W = 230;
-export const TODAY_FRAC = (25 - 1) / 31;
+
+const TODAY_MONTHS_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+// A linha do tempo começa em maio/2026 (índice de mês 0). O marcador "Hoje"
+// precisa ser calculado a partir da data real — nunca fixo.
+export function fractionalForDate(now: Date): number {
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const d = now.getDate();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const base = (2026 - 1) * 12 + 5;
+  const monthIdx = (y - 1) * 12 + m - base;
+  return monthIdx + (d - 1) / daysInMonth;
+}
+
+export function labelForDate(now: Date): string {
+  return `${now.getDate()} ${TODAY_MONTHS_ABBR[now.getMonth()]} ${now.getFullYear()}`;
+}
+
+export const TODAY_FRAC = fractionalForDate(new Date());
+export const TODAY_LABEL = labelForDate(new Date());
 
 export const QUARTERS = [
   { label: "Q2 2026", start: 0, span: 2 },
