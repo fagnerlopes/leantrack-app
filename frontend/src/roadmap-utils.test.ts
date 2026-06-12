@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildTimeline, labelForDate } from "./roadmap-utils";
+import { buildTimeline, labelForDate, applyReorder } from "./roadmap-utils";
 
 type DI = { startDate: string | null; endDate: string | null; extMilestone: string | null };
 const item = (startDate: string | null, endDate: string | null = null, extMilestone: string | null = null): DI =>
@@ -64,6 +64,32 @@ describe("buildTimeline — intervalo dinâmico", () => {
   it("mostra o ano nos rótulos de janeiro ao cruzar o ano", () => {
     const tl = buildTimeline([item("2026-11-01", "2027-02-28")]);
     expect(tl.months).toContain("Jan'27");
+  });
+});
+
+describe("applyReorder", () => {
+  const mk = (id: number, sortOrder: number) => ({ id, sortOrder });
+
+  it("reordena o array (não só os valores de sortOrder)", () => {
+    const items = [mk(1, 10), mk(2, 20), mk(3, 30)];
+    // Move o id 3 para o início.
+    const { items: out } = applyReorder(items, [3, 1, 2]);
+    expect(out.map(i => i.id)).toEqual([3, 1, 2]);
+    expect(out.map(i => i.sortOrder)).toEqual([10, 20, 30]);
+  });
+
+  it("devolve as entries com sort_order em passos de 10", () => {
+    const { entries } = applyReorder([mk(5, 10), mk(6, 20)], [6, 5]);
+    expect(entries).toEqual([{ id: 6, sortOrder: 10 }, { id: 5, sortOrder: 20 }]);
+  });
+
+  it("preserva a ordem relativa correta dentro de um grupo mesmo com itens de fora", () => {
+    // Itens de outro status (ids 10,11) não estão em orderedIds e mantêm seu sortOrder.
+    const items = [mk(1, 10), mk(2, 20), mk(10, 15), mk(11, 25)];
+    const { items: out } = applyReorder(items, [2, 1]); // inverte 1 e 2
+    // Após inverter: id 2 -> 10, id 1 -> 20. Ordem por sortOrder asc.
+    const pos = (id: number) => out.findIndex(i => i.id === id);
+    expect(pos(2)).toBeLessThan(pos(1)); // 2 antes de 1 dentro do grupo
   });
 });
 

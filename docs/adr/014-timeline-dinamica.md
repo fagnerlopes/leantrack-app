@@ -28,7 +28,15 @@ Uma única função `buildTimeline(items)` em `roadmap-utils.ts` devolve um obje
 - **Navegação:** "arrastar com o mouse" (pan via pointer events) na área do
   gráfico, além da barra de rolagem. O puxador de reordenação migrou da linha
   inteira para um ícone (`GripVertical`) na coluna do nome, liberando a área do
-  gráfico para o pan sem conflitar com o drag nativo do HTML5.
+  gráfico para o pan sem conflitar com o drag nativo do HTML5. Cada coluna de mês
+  tem largura mínima de 110px (`COL_MIN_PX`): períodos longos transbordam e
+  ficam arrastáveis; períodos curtos preenchem a largura disponível (flex), sem
+  espaço vazio.
+- **Reordenação (correção de bug pré-existente):** `handleReorder` apenas
+  trocava o valor de `sortOrder`, sem reordenar o array — e o Gantt renderiza na
+  ordem do array, então a mudança só aparecia após recarregar. A função pura
+  `applyReorder()` reordena o array e reatribui `sort_order` em passos de 10,
+  espelhando o `ORDER BY sort_order ASC, id ASC` do backend.
 - **Posição inicial:** rolagem centralizada no "Hoje" (clamp nas bordas); o
   marcador "Hoje" só é desenhado quando está dentro do intervalo.
 - **Coluna de nomes fixa:** as células da coluna "Iniciativa" viraram

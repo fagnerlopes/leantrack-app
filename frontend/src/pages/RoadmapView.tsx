@@ -10,7 +10,7 @@ import RoadmapLegend from "../components/RoadmapLegend";
 import ItemModal from "../ItemModal";
 import ActionMenu, { type ActionItem } from "../components/ActionMenu";
 import Toast from "../components/Toast";
-import { buildTimeline, calcRisk } from "../roadmap-utils";
+import { buildTimeline, calcRisk, applyReorder } from "../roadmap-utils";
 import { parseRoadmapId } from "../roadmap-path";
 
 const emptyForm: ItemInput = {
@@ -89,11 +89,10 @@ export default function RoadmapView() {
 
   async function handleReorder(_status: string, orderedIds: number[]) {
     if (roadmapId == null) return;
-    const entries = orderedIds.map((id, idx) => ({ id, sortOrder: (idx + 1) * 10 }));
-    setItems(prev => {
-      const map = new Map(entries.map(e => [e.id, e.sortOrder]));
-      return prev.map(i => map.has(i.id) ? { ...i, sortOrder: map.get(i.id)! } : i);
-    });
+    // Reordena o array localmente (otimista) para a mudança aparecer na hora —
+    // o Gantt renderiza na ordem do array, não pelo valor de sortOrder.
+    const { entries } = applyReorder(items, orderedIds);
+    setItems(prev => applyReorder(prev, orderedIds).items);
     try {
       await api.reorderItems(roadmapId, entries);
     } catch (e: any) {

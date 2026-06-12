@@ -173,3 +173,19 @@ export function fmtDate(dateStr: string | null): string {
 export function hasExtDep(it: Item): boolean {
   return !!(it.extTeam && it.extMilestone);
 }
+
+// Aplica uma nova ordem (orderedIds) à lista, atribuindo sort_order em passos de
+// 10 e reordenando o array para refletir a mudança imediatamente (atualização
+// otimista). A ordem do array resultante espelha a do backend
+// (`ORDER BY sort_order ASC, id ASC`), pois o Gantt renderiza na ordem do array.
+export function applyReorder<T extends { id: number; sortOrder: number }>(
+  items: T[],
+  orderedIds: number[],
+): { items: T[]; entries: { id: number; sortOrder: number }[] } {
+  const entries = orderedIds.map((id, idx) => ({ id, sortOrder: (idx + 1) * 10 }));
+  const map = new Map(entries.map(e => [e.id, e.sortOrder]));
+  const next = items
+    .map(i => (map.has(i.id) ? { ...i, sortOrder: map.get(i.id)! } : i))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  return { items: next, entries };
+}

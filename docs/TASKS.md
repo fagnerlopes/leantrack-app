@@ -189,3 +189,10 @@ ADR: 014 (timeline dinâmica derivada das datas das iniciativas)
 | Filtro "Trimestre" dinâmico em `RoadmapView` | Done | dropdown e filtro usam `timeline.quarters`/`dateToFractional`; timeline calculada de todas as iniciativas (não das filtradas) para o intervalo ser estável |
 | Testes Vitest | Done | `roadmap-utils.test.ts` reescrito p/ `buildTimeline` (9 casos, incl. o bug: iniciativa antes de maio fica visível); 36/36 Vitest verdes; `tsc -b` limpo; `go test ./...` verde (backend inalterado) |
 | Verificação visual (Playwright) | Done | Roadmap de teste com iniciativa de jan/2026: timeline começa em Out'25 (antes de maio), trimestres dinâmicos, "Hoje" centralizado, pan e coluna de nomes fixa validados em 2 screenshots |
+
+### Ajustes pós-verificação (mesma sessão)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Pan não tinha o que arrastar em telas largas | Done | Largura mínima da coluna de mês 64px→110px (`COL_MIN_PX` no `Gantt.tsx`): períodos longos transbordam e ficam arrastáveis; curtos continuam preenchendo a largura (flex). Verificado em 1920px: scrollWidth 2540 > 1870, arrastar revela o início (Out'25) |
+| Reordenar por arrastar não refletia na tela (bug pré-existente) | Done | `handleReorder` só trocava `sortOrder` sem reordenar o array; como o Gantt renderiza na ordem do array, só mudava após recarregar. Extraída `applyReorder()` (pura, reordena + reatribui sort_order em passos de 10, espelha `ORDER BY sort_order, id` do backend) com 3 testes; verificado via DnD nativo: "Lançamento GA" sobe acima de "Nova arquitetura" na hora |

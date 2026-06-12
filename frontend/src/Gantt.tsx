@@ -215,9 +215,10 @@ export default function Gantt({ items, timeline, onSelect, onReorder, innerRef }
   }
 
   const { months, quarters, totalMonths, todayFrac, todayInRange, todayLabel } = timeline;
-  // Cada coluna de mês tem ~64px; garante que a timeline seja larga o bastante
-  // para rolar/arrastar mesmo com muitos meses.
-  const innerMinWidth = LABEL_W + totalMonths * 64;
+  // Largura mínima de cada coluna de mês. Períodos curtos preenchem a largura
+  // disponível (flex); períodos longos ultrapassam a tela e viram arrastáveis.
+  const COL_MIN_PX = 110;
+  const innerMinWidth = LABEL_W + totalMonths * COL_MIN_PX;
 
   return (
     <div ref={innerRef} style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0" }}>
