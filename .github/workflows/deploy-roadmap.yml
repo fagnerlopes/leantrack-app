@@ -51,6 +51,44 @@ jobs:
 
       - run: gem install kamal --no-document
 
+      # Trava de segurança: faz backup do banco de produção ANTES de publicar a
+      # nova versão. Salva o dump em /data/backups na VM do banco (disco com
+      # snapshot diário) e o disponibiliza como artefato deste run.
+      # No primeiro deploy de um ambiente novo o container do banco ainda não
+      # existe — nesse caso o passo é pulado de propósito. Em um ambiente com
+      # banco existente, se o backup falhar o deploy é abortado.
+      - name: Backup database before deploy
+        run: |
+          set -euo pipefail
+          DB_IP="${INFRA_DB_IP:-}"
+          if [ -z "$DB_IP" ]; then
+            echo "::notice::INFRA_DB_IP vazio — sem banco a copiar; pulando backup."
+            exit 0
+          fi
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30"
+          if ! ssh $SSH_OPTS root@"$DB_IP" "docker ps --format '{{.Names}}' | grep -qx '${REPO_NAME}-db'"; then
+            echo "::notice::Container ${REPO_NAME}-db ainda não existe (primeiro deploy?) — pulando backup."
+            exit 0
+          fi
+          TS=$(date +%Y%m%d-%H%M%S)
+          DUMP="/data/backups/predeploy-${TS}.dump"
+          echo "Gerando backup em $DUMP na VM do banco ($DB_IP)…"
+          ssh $SSH_OPTS root@"$DB_IP" "mkdir -p /data/backups && docker exec ${REPO_NAME}-db pg_dump -U postgres -Fc postgres > '$DUMP'"
+          # Valida o dump (lista o conteúdo) e traz uma cópia para o runner.
+          ssh $SSH_OPTS root@"$DB_IP" "docker exec -i ${REPO_NAME}-db pg_restore --list < '$DUMP' > /dev/null && ls -lh '$DUMP'"
+          mkdir -p backup-artifact
+          scp $SSH_OPTS root@"$DB_IP":"$DUMP" "backup-artifact/predeploy-${TS}.dump"
+          echo "BACKUP_TS=$TS" >> "$GITHUB_ENV"
+          echo "::notice::Backup do banco concluído: $DUMP (cópia anexada como artefato)."
+
+      - name: Upload database backup artifact
+        if: env.BACKUP_TS != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ env.BACKUP_TS }}
+          path: backup-artifact/*.dump
+          retention-days: 90
+
       - name: Deploy with Kamal
         env:
           KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

@@ -159,3 +159,5 @@ ADR: 011 (busca de usuários para autocomplete do compartilhamento)
 | Testes Go + Vitest | Done | Go `TestSearchUsersForRoadmap`: 403 sem `can_share`, vazio com <4 chars, casa e-mail/nome, exclui dono e colaboradores. Vitest: não busca com <4 chars, sugere a partir de 4 e preenche ao escolher. `go test` verde; `tsc -b` ok; 32+ testes Vitest verdes |
 | Verificação visual (Playwright) | Done | 3 screenshots revisadas: badge "Hoje" dinâmico, legenda no rodapé com 0 iniciativas, dropdown de autocomplete |
 | Regra de backup antes de publicar (CLAUDE.md) | Done | Adicionada a regra: sempre fazer backup do banco de produção antes de qualquer deploy |
+| Deploy das melhorias (ambiente `roadmap`) | Done | Publicado em https://187.45.201.251.nip.io; `GET /up` 200. Backup manual pré-deploy validado (`/data/backups/predeploy-20260612-153710.dump`, 12 tabelas) |
+| Backup automático no pipeline de deploy | Done | Passo "Backup database before deploy" em `deploy-roadmap.yml`: `pg_dump -Fc` antes do `kamal setup`, salvo em `/data/backups` + artefato `db-backup-<ts>` (90 dias); pulado no 1º deploy, bloqueante se falhar com banco existente. ADR 012; CLAUDE.md atualizado |
