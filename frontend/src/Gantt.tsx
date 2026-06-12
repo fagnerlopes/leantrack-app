@@ -302,12 +302,13 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
             );
           })}
 
-          {/* Today footer */}
-          <div style={{ display: "flex", borderTop: "1px solid #e2e8f0", background: "#fff", padding: "8px 0" }}>
+          {/* Today footer — altura própria para o badge não ser cortado pelo
+              overflow:hidden do card */}
+          <div style={{ display: "flex", borderTop: "1px solid #e2e8f0", background: "#fff", padding: "8px 0 16px" }}>
             <div style={{ width: LABEL_W, minWidth: LABEL_W, borderRight: "1px solid #e2e8f0" }}/>
-            <div style={{ flex: 1, position: "relative" }}>
+            <div style={{ flex: 1, position: "relative", height: 22 }}>
               <div style={{
-                position: "absolute", left: `${TODAY_FRAC * COL_PCT}%`, transform: "translateX(-50%)",
+                position: "absolute", top: 0, left: `${TODAY_FRAC * COL_PCT}%`, transform: "translateX(-50%)",
                 background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700,
                 padding: "3px 7px", borderRadius: 4, whiteSpace: "nowrap",
               }}>Hoje · {TODAY_LABEL}</div>
