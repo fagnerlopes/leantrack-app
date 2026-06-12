@@ -10,7 +10,7 @@ import RoadmapLegend from "../components/RoadmapLegend";
 import ItemModal from "../ItemModal";
 import ActionMenu, { type ActionItem } from "../components/ActionMenu";
 import Toast from "../components/Toast";
-import { QUARTERS, calcRisk, dateToFractional } from "../roadmap-utils";
+import { buildTimeline, calcRisk } from "../roadmap-utils";
 import { parseRoadmapId } from "../roadmap-path";
 
 const emptyForm: ItemInput = {
@@ -102,15 +102,19 @@ export default function RoadmapView() {
     }
   }
 
+  // Timeline derivada de TODAS as iniciativas (não das filtradas) para que o
+  // intervalo e a lista de trimestres permaneçam estáveis ao aplicar filtros.
+  const timeline = useMemo(() => buildTimeline(items), [items]);
+
   const filtered = useMemo(() => {
     let out = items;
     if (statusFilter !== "all") out = out.filter(i => i.status === statusFilter);
     if (quarterFilter !== "all") {
-      const q = QUARTERS.find(x => x.label === quarterFilter);
+      const q = timeline.quarters.find(x => x.label === quarterFilter);
       if (q) {
         out = out.filter(i => {
-          const sf = dateToFractional(i.startDate);
-          const ef = dateToFractional(i.endDate);
+          const sf = timeline.dateToFractional(i.startDate);
+          const ef = timeline.dateToFractional(i.endDate);
           if (sf === null || ef === null) return false;
           return ef >= q.start && sf <= q.start + q.span;
         });
@@ -118,7 +122,7 @@ export default function RoadmapView() {
     }
     if (riskOnly) out = out.filter(i => ["critico", "alerta"].includes(calcRisk(i) as any));
     return out;
-  }, [items, statusFilter, quarterFilter, riskOnly]);
+  }, [items, statusFilter, quarterFilter, riskOnly, timeline]);
 
   const blockedCount = items.filter(i => calcRisk(i) === "critico").length;
   const alertCount = items.filter(i => calcRisk(i) === "alerta").length;
@@ -200,7 +204,7 @@ export default function RoadmapView() {
           { v: "concluido", l: "Concluído" }, { v: "pausado", l: "Pausado" },
         ]} />
         <FilterSelect label="Trimestre" value={quarterFilter} onChange={setQuarterFilter} options={[
-          { v: "all", l: "Todos" }, ...QUARTERS.map(q => ({ v: q.label, l: q.label })),
+          { v: "all", l: "Todos" }, ...timeline.quarters.map(q => ({ v: q.label, l: q.label })),
         ]} />
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#0f172a", cursor: "pointer" }}>
           <input type="checkbox" checked={riskOnly} onChange={e => setRiskOnly(e.target.checked)} />
@@ -221,14 +225,15 @@ export default function RoadmapView() {
         ) : (
           <Gantt
             items={filtered}
+            timeline={timeline}
             innerRef={ganttRef}
             onSelect={canEdit ? (it) => setEditing(it) : undefined}
             onReorder={canEdit ? handleReorder : undefined}
           />
         )}
-        {canEdit && items.length > 0 && (
+        {items.length > 0 && (
           <div style={{ marginTop: 10, fontSize: 11, color: "#94a3b8" }}>
-            Dica: arraste uma linha para reordenar dentro do mesmo status · clique para editar.
+            Dica: arraste a timeline para navegar no tempo{canEdit ? " · arraste o ícone ⋮⋮ para reordenar dentro do mesmo status · clique para editar" : ""}.
           </div>
         )}
       </div>

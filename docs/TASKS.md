@@ -175,3 +175,17 @@ ADR: 013 (biblioteca de ícones lucide-react + menu de ações em dropdown)
 | Ajuste dos testes do RoadmapView | Done | `RoadmapView.test.tsx` agora abre o menu "Ações" antes de buscar os itens (`menuitem` Renomear/Compartilhar/Excluir roadmap); modo leitura verifica ausência do botão "Ações" |
 | Type-check + testes | Done | `tsc -b` limpo; 32/32 Vitest verdes; `go build`/`go test ./...` verdes (backend inalterado) |
 | Verificação visual (Playwright) | Done | 3 screenshots revisadas: visão geral (ícones de risco, chips, setas, link de épico), menu de 9 pontos aberto, modal com X de fechar |
+
+## Sessão 12/06/2026 (tarde) — Timeline dinâmica e arrastável
+
+ADR: 014 (timeline dinâmica derivada das datas das iniciativas)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| `buildTimeline(items)` substitui a base fixa de maio/2026 | Done | `roadmap-utils.ts`: removidos `MONTHS`/`TOTAL_MONTHS`/`QUARTERS`/`TODAY_FRAC`/`base=(2026-1)*12+5`. Intervalo = min/max de `startDate`/`endDate`/`extMilestone`, 1 mês de folga, arredondado para trimestre cheio; fallback em torno de hoje sem datas |
+| Gantt recebe `timeline` por prop | Done | meses/trimestres/conversores e marcador "Hoje" vêm do objeto `Timeline`; "Hoje" só desenhado quando `todayInRange` |
+| Arrastar a timeline (pan) + coluna de nomes fixa | Done | Pan via pointer events no contêiner com clamp e supressão do clique pós-pan; reordenação migrou para o puxador `GripVertical` na coluna do nome; células da coluna "Iniciativa" viraram `position: sticky; left: 0` para não sumirem ao rolar |
+| Rolagem inicial centralizada no "Hoje" | Done | `useLayoutEffect` posiciona `scrollLeft` no `todayFrac` (clamp nas bordas) ao montar/mudar a timeline |
+| Filtro "Trimestre" dinâmico em `RoadmapView` | Done | dropdown e filtro usam `timeline.quarters`/`dateToFractional`; timeline calculada de todas as iniciativas (não das filtradas) para o intervalo ser estável |
+| Testes Vitest | Done | `roadmap-utils.test.ts` reescrito p/ `buildTimeline` (9 casos, incl. o bug: iniciativa antes de maio fica visível); 36/36 Vitest verdes; `tsc -b` limpo; `go test ./...` verde (backend inalterado) |
+| Verificação visual (Playwright) | Done | Roadmap de teste com iniciativa de jan/2026: timeline começa em Out'25 (antes de maio), trimestres dinâmicos, "Hoje" centralizado, pan e coluna de nomes fixa validados em 2 screenshots |

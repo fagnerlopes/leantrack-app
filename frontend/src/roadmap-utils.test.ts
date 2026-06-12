@@ -1,24 +1,69 @@
 import { describe, it, expect } from "vitest";
-import { fractionalForDate, labelForDate, TOTAL_MONTHS } from "./roadmap-utils";
+import { buildTimeline, labelForDate } from "./roadmap-utils";
 
-describe("fractionalForDate", () => {
-  it("posiciona o início da timeline (1º de maio/2026) em 0", () => {
-    expect(fractionalForDate(new Date(2026, 4, 1))).toBeCloseTo(0, 5);
+type DI = { startDate: string | null; endDate: string | null; extMilestone: string | null };
+const item = (startDate: string | null, endDate: string | null = null, extMilestone: string | null = null): DI =>
+  ({ startDate, endDate, extMilestone });
+
+describe("buildTimeline — intervalo dinâmico", () => {
+  it("arredonda para trimestres cheios com 1 mês de folga em cada ponta", () => {
+    // Iniciativas de fev/2026 a ago/2026.
+    // min=fev -> -1 mês = jan -> início do trimestre = jan/2026 (coluna 0)
+    // max=ago -> +1 mês = set -> fim do trimestre = set/2026
+    const tl = buildTimeline([item("2026-02-10", "2026-08-20")]);
+    expect(tl.months[0]).toBe("Jan'26");
+    expect(tl.totalMonths).toBe(9); // jan..set = 9 meses (3 trimestres)
+    expect(tl.totalMonths % 3).toBe(0);
+    expect(tl.quarters.map(q => q.label)).toEqual(["Q1 2026", "Q2 2026", "Q3 2026"]);
   });
 
-  it("posiciona 25/mai/2026 em ~0,774 (valor antigo, agora calculado)", () => {
-    // (25 - 1) / 31 = 0.7741…
-    expect(fractionalForDate(new Date(2026, 4, 25))).toBeCloseTo((25 - 1) / 31, 5);
+  it("os trimestres cobrem exatamente o total de meses", () => {
+    const tl = buildTimeline([item("2026-02-10", "2027-03-15")]);
+    const cover = tl.quarters.reduce((s, q) => s + q.span, 0);
+    expect(cover).toBe(tl.totalMonths);
+    expect(tl.quarters[0].start).toBe(0);
   });
 
-  it("avança um mês inteiro: 1º de junho/2026 = 1", () => {
-    expect(fractionalForDate(new Date(2026, 5, 1))).toBeCloseTo(1, 5);
+  it("CASO DO BUG: iniciativa anterior a maio/2026 fica com fração >= 0 e visível", () => {
+    // Antes, a base era fixa em maio/2026 e datas anteriores viravam fração negativa.
+    const tl = buildTimeline([item("2026-01-15", "2026-03-10")]);
+    const startFrac = tl.dateToFractional("2026-01-15")!;
+    expect(startFrac).toBeGreaterThanOrEqual(0);
+    // A base deve ser anterior a maio/2026 (out/2025, pelo arredondamento de trimestre).
+    expect(tl.months[0]).toBe("Out'25");
   });
 
-  it("12/jun/2026 cai dentro da janela visível da timeline", () => {
-    const f = fractionalForDate(new Date(2026, 5, 12));
-    expect(f).toBeGreaterThan(1);
-    expect(f).toBeLessThan(TOTAL_MONTHS);
+  it("dateToFractional é relativo à base: 1º dia da coluna 0 = 0, mês seguinte = 1", () => {
+    const tl = buildTimeline([item("2026-02-10", "2026-08-20")]); // base = jan/2026
+    expect(tl.dateToFractional("2026-01-01")).toBeCloseTo(0, 5);
+    expect(tl.dateToFractional("2026-02-01")).toBeCloseTo(1, 5);
+    expect(tl.dateToFractional("2026-01-25")).toBeCloseTo((25 - 1) / 31, 5);
+  });
+
+  it("endDateToFractional estende a barra até o fim do dia (d/daysInMonth)", () => {
+    const tl = buildTimeline([item("2026-02-10", "2026-08-20")]); // base = jan/2026
+    expect(tl.endDateToFractional("2026-01-31")).toBeCloseTo(1, 5); // fim de jan = início de fev
+  });
+
+  it("inclui marcos externos (extMilestone) no cálculo do intervalo", () => {
+    const tl = buildTimeline([item("2026-06-01", "2026-06-30", "2026-11-15")]);
+    const msFrac = tl.dateToFractional("2026-11-15")!;
+    expect(msFrac).toBeGreaterThanOrEqual(0);
+    expect(msFrac).toBeLessThanOrEqual(tl.totalMonths);
+  });
+
+  it("sem nenhuma data, gera um intervalo padrão válido em torno de hoje", () => {
+    const tl = buildTimeline([]);
+    expect(tl.totalMonths).toBeGreaterThan(0);
+    expect(tl.totalMonths % 3).toBe(0);
+    expect(tl.months.length).toBe(tl.totalMonths);
+    expect(tl.quarters.reduce((s, q) => s + q.span, 0)).toBe(tl.totalMonths);
+    expect(tl.todayInRange).toBe(true);
+  });
+
+  it("mostra o ano nos rótulos de janeiro ao cruzar o ano", () => {
+    const tl = buildTimeline([item("2026-11-01", "2027-02-28")]);
+    expect(tl.months).toContain("Jan'27");
   });
 });
 

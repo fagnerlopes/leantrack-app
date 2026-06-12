@@ -1,38 +1,136 @@
 import { AlertTriangle, Zap, Check, type LucideIcon } from "lucide-react";
 import type { Item } from "./api";
 
-export const MONTHS = ["Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez", "Jan", "Fev", "Mar", "Abr", "Mai'27"];
-export const TOTAL_MONTHS = 13;
 export const LABEL_W = 230;
 
-const TODAY_MONTHS_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MONTH_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-// A linha do tempo começa em maio/2026 (índice de mês 0). O marcador "Hoje"
-// precisa ser calculado a partir da data real — nunca fixo.
-export function fractionalForDate(now: Date): number {
-  const y = now.getFullYear();
-  const m = now.getMonth() + 1;
-  const d = now.getDate();
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const base = (2026 - 1) * 12 + 5;
-  const monthIdx = (y - 1) * 12 + m - base;
-  return monthIdx + (d - 1) / daysInMonth;
+// Índice absoluto de mês: (ano - 1) * 12 + mês(1-12). Permite aritmética simples
+// entre datas (diferença em meses, arredondamento para trimestre, etc).
+function absMonth(year: number, month1based: number): number {
+  return (year - 1) * 12 + month1based;
+}
+
+// Converte um índice absoluto de mês de volta em { ano, mês(1-12) }.
+function fromAbsMonth(a: number): { year: number; month: number } {
+  return { year: Math.floor((a - 1) / 12) + 1, month: ((a - 1) % 12) + 1 };
+}
+
+function parseYM(dateStr: string): { y: number; m: number; d: number } {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return { y, m, d };
 }
 
 export function labelForDate(now: Date): string {
-  return `${now.getDate()} ${TODAY_MONTHS_ABBR[now.getMonth()]} ${now.getFullYear()}`;
+  return `${now.getDate()} ${MONTH_ABBR[now.getMonth()]} ${now.getFullYear()}`;
 }
 
-export const TODAY_FRAC = fractionalForDate(new Date());
-export const TODAY_LABEL = labelForDate(new Date());
+export type Quarter = { label: string; start: number; span: number };
 
-export const QUARTERS = [
-  { label: "Q2 2026", start: 0, span: 2 },
-  { label: "Q3 2026", start: 2, span: 3 },
-  { label: "Q4 2026", start: 5, span: 3 },
-  { label: "Q1 2027", start: 8, span: 3 },
-  { label: "Q2 2027", start: 11, span: 2 },
-];
+export type Timeline = {
+  baseAbsMonth: number;
+  totalMonths: number;
+  months: string[];
+  quarters: Quarter[];
+  todayFrac: number;
+  todayInRange: boolean;
+  todayLabel: string;
+  dateToFractional: (dateStr: string | null) => number | null;
+  endDateToFractional: (dateStr: string | null) => number | null;
+};
+
+type DatedItem = Pick<Item, "startDate" | "endDate" | "extMilestone">;
+
+// Posição fracionária de uma data (em "meses") relativa ao início da timeline.
+// 0 = 1º dia da coluna 0; 1 = 1º dia da coluna seguinte; etc.
+function fractionalForAbs(y: number, m: number, d: number, baseAbsMonth: number): number {
+  const daysInMonth = new Date(y, m, 0).getDate();
+  return absMonth(y, m) - baseAbsMonth + (d - 1) / daysInMonth;
+}
+
+// Calcula o intervalo da timeline a partir das datas das iniciativas:
+// começa no início do trimestre (com 1 mês de folga antes da iniciativa mais
+// antiga) e termina no fim do trimestre (com 1 mês de folga após a mais recente).
+// Sem nenhuma data cadastrada, usa um intervalo padrão em torno de hoje.
+export function buildTimeline(items: DatedItem[]): Timeline {
+  const absMonths: number[] = [];
+  for (const it of items) {
+    for (const ds of [it.startDate, it.endDate, it.extMilestone]) {
+      if (ds) {
+        const { y, m } = parseYM(ds);
+        absMonths.push(absMonth(y, m));
+      }
+    }
+  }
+
+  let minAbs: number;
+  let maxAbs: number;
+  if (absMonths.length === 0) {
+    const now = new Date();
+    const t = absMonth(now.getFullYear(), now.getMonth() + 1);
+    minAbs = t;
+    maxAbs = t;
+  } else {
+    minAbs = Math.min(...absMonths);
+    maxAbs = Math.max(...absMonths);
+  }
+
+  // 1 mês de folga em cada ponta, depois arredonda para trimestre cheio.
+  minAbs -= 1;
+  maxAbs += 1;
+  const minMonth = fromAbsMonth(minAbs).month; // 1-12
+  const maxMonth = fromAbsMonth(maxAbs).month;
+  const baseAbsMonth = minAbs - ((minMonth - 1) % 3);        // recua ao início do trimestre
+  const endAbsMonth = maxAbs + (2 - ((maxMonth - 1) % 3));   // avança ao fim do trimestre
+  const totalMonths = endAbsMonth - baseAbsMonth + 1;        // múltiplo de 3
+
+  const months: string[] = [];
+  for (let i = 0; i < totalMonths; i++) {
+    const { year, month } = fromAbsMonth(baseAbsMonth + i);
+    const abbr = MONTH_ABBR[month - 1];
+    // Ano só em janeiro e na primeira coluna, para não poluir.
+    const showYear = month === 1 || i === 0;
+    months.push(showYear ? `${abbr}'${String(year).slice(2)}` : abbr);
+  }
+
+  const quarters: Quarter[] = [];
+  for (let i = 0; i < totalMonths; i += 3) {
+    const { year, month } = fromAbsMonth(baseAbsMonth + i);
+    const qn = Math.floor((month - 1) / 3) + 1;
+    quarters.push({ label: `Q${qn} ${year}`, start: i, span: 3 });
+  }
+
+  const now = new Date();
+  const todayFrac = fractionalForAbs(now.getFullYear(), now.getMonth() + 1, now.getDate(), baseAbsMonth);
+
+  const dateToFractional = (dateStr: string | null): number | null => {
+    if (!dateStr) return null;
+    const { y, m, d } = parseYM(dateStr);
+    return fractionalForAbs(y, m, d, baseAbsMonth);
+  };
+
+  // Uma barra que TERMINA no dia D deve se estender até o fim do dia D (início
+  // do dia D+1). Usar d/daysInMonth (em vez de (d-1)/daysInMonth) evita que a
+  // barra "engula" o dia de início do próximo item.
+  const endDateToFractional = (dateStr: string | null): number | null => {
+    if (!dateStr) return null;
+    const { y, m, d } = parseYM(dateStr);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    return absMonth(y, m) - baseAbsMonth + d / daysInMonth;
+  };
+
+  return {
+    baseAbsMonth,
+    totalMonths,
+    months,
+    quarters,
+    todayFrac,
+    todayInRange: todayFrac >= 0 && todayFrac <= totalMonths,
+    todayLabel: labelForDate(now),
+    dateToFractional,
+    endDateToFractional,
+  };
+}
 
 export const STATUS_META: Record<string, { label: string; color: string; bg: string; text: string }> = {
   "em-andamento": { label: "Em andamento", color: "#059669", bg: "#d1fae5", text: "#065f46" },
@@ -65,30 +163,6 @@ export function calcRisk(item: Pick<Item, "startDate" | "extMilestone"> & { extT
   if (diff > 0) return "critico";
   if (diff > -14) return "alerta";
   return "ok";
-}
-
-export function dateToFractional(dateStr: string | null): number | null {
-  if (!dateStr) return null;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const base = (2026 - 1) * 12 + 5;
-  const absMonths = (y - 1) * 12 + m;
-  const monthIdx = absMonths - base;
-  return monthIdx + (d - 1) / daysInMonth;
-}
-
-// Convention: a bar that ENDS on day D should visually extend through
-// the end of day D — i.e., to the start of day D+1. Using (d-1)/daysInMonth
-// (same as start) makes end-day-D bars appear to stop at the START of day D,
-// causing them to "swallow" the next item's start day in the visual timeline.
-export function endDateToFractional(dateStr: string | null): number | null {
-  if (!dateStr) return null;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const base = (2026 - 1) * 12 + 5;
-  const absMonths = (y - 1) * 12 + m;
-  const monthIdx = absMonths - base;
-  return monthIdx + d / daysInMonth;
 }
 
 export function fmtDate(dateStr: string | null): string {

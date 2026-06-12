@@ -1,13 +1,14 @@
-import { useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, CornerDownRight, ExternalLink, Zap } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { AlertTriangle, ArrowRight, CornerDownRight, ExternalLink, GripVertical, Zap } from "lucide-react";
 import type { Item } from "./api";
 import {
-  MONTHS, TOTAL_MONTHS, LABEL_W, TODAY_FRAC, TODAY_LABEL, QUARTERS,
-  STATUS_META, BAR_COLORS, RISK_META, calcRisk, dateToFractional, endDateToFractional, fmtDate, hasExtDep,
+  LABEL_W, STATUS_META, BAR_COLORS, RISK_META, calcRisk, fmtDate, hasExtDep,
+  type Timeline,
 } from "./roadmap-utils";
 
 type Props = {
   items: Item[];
+  timeline: Timeline;
   onSelect?: (it: Item) => void;
   onReorder?: (status: string, orderedIds: number[]) => void;
   innerRef?: React.RefObject<HTMLDivElement | null>;
@@ -27,9 +28,8 @@ function RiskBadge({ level }: { level: "critico" | "alerta" | "ok" }) {
   );
 }
 
-function MilestoneDiamond({ frac, risk, label }: { frac: number; risk: any; label: string }) {
-  const COL_W = 100 / TOTAL_MONTHS;
-  const left = frac * COL_W;
+function MilestoneDiamond({ frac, risk, label, colW }: { frac: number; risk: any; label: string; colW: number }) {
+  const left = frac * colW;
   const color = risk === "critico" ? "#dc2626" : risk === "alerta" ? "#d97706" : "#059669";
   return (
     <div style={{
@@ -50,15 +50,15 @@ function MilestoneDiamond({ frac, risk, label }: { frac: number; risk: any; labe
   );
 }
 
-function GanttBar({ item }: { item: Item }) {
-  const COL_W = 100 / TOTAL_MONTHS;
+function GanttBar({ item, timeline }: { item: Item; timeline: Timeline }) {
+  const COL_W = 100 / timeline.totalMonths;
   const risk = calcRisk(item);
   const isCritico = risk === "critico";
   const isAlerta = risk === "alerta";
   const hasMs = hasExtDep(item);
 
-  const startFrac = item.startDate ? dateToFractional(item.startDate)! : TODAY_FRAC;
-  const endFrac = item.endDate ? endDateToFractional(item.endDate)! : startFrac + 1;
+  const startFrac = item.startDate ? timeline.dateToFractional(item.startDate)! : timeline.todayFrac;
+  const endFrac = item.endDate ? timeline.endDateToFractional(item.endDate)! : startFrac + 1;
   const left = Math.max(0, startFrac) * COL_W;
   // No half-month floor: tiny items can be very thin (we rely on minWidth: 8px
   // for visibility). Forcing 0.5 month would make short tasks visually invade
@@ -67,7 +67,7 @@ function GanttBar({ item }: { item: Item }) {
 
   const baseColor = item.color || BAR_COLORS[item.status] || "#64748b";
   const barColor = isCritico ? "#dc2626" : isAlerta ? "#d97706" : baseColor;
-  const msFrac = hasMs ? dateToFractional(item.extMilestone!) : null;
+  const msFrac = hasMs ? timeline.dateToFractional(item.extMilestone!) : null;
 
   return (
     <div style={{ position: "relative", height: 38 }}>
@@ -91,7 +91,7 @@ function GanttBar({ item }: { item: Item }) {
         )}
       </div>
       {hasMs && msFrac !== null && (
-        <MilestoneDiamond frac={msFrac} risk={risk} label={fmtDate(item.extMilestone)}/>
+        <MilestoneDiamond frac={msFrac} risk={risk} label={fmtDate(item.extMilestone)} colW={COL_W}/>
       )}
     </div>
   );
@@ -122,11 +122,72 @@ function ExtDepTag({ item }: { item: Item }) {
   );
 }
 
-export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
-  const COL_PCT = 100 / TOTAL_MONTHS;
+export default function Gantt({ items, timeline, onSelect, onReorder, innerRef }: Props) {
+  const COL_PCT = 100 / timeline.totalMonths;
   const draggingId = useRef<number | null>(null);
   const draggingStatus = useRef<string | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
+
+  // --- Pan (arrastar a timeline com o mouse) ---
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pan = useRef<{ active: boolean; moved: boolean; startX: number; startScroll: number }>({
+    active: false, moved: false, startX: 0, startScroll: 0,
+  });
+  const [grabbing, setGrabbing] = useState(false);
+
+  // Posiciona a rolagem inicial centralizando o "Hoje" (com clamp nas bordas).
+  // Roda quando a timeline muda (ex.: itens carregados / filtro de período).
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const innerWidth = el.scrollWidth;
+    const gridWidth = innerWidth - LABEL_W;
+    if (gridWidth <= 0) return;
+    const todayX = LABEL_W + (timeline.todayFrac / timeline.totalMonths) * gridWidth;
+    el.scrollLeft = Math.max(0, Math.min(todayX - el.clientWidth / 2, innerWidth - el.clientWidth));
+  }, [timeline]);
+
+  function isInteractive(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    return !!el?.closest("a, button, input, [data-reorder-handle]");
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0 || isInteractive(e.target)) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    pan.current = { active: true, moved: false, startX: e.clientX, startScroll: el.scrollLeft };
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!pan.current.active) return;
+    const dx = e.clientX - pan.current.startX;
+    if (!pan.current.moved && Math.abs(dx) < 5) return;
+    if (!pan.current.moved) {
+      pan.current.moved = true;
+      setGrabbing(true);
+      scrollRef.current?.setPointerCapture(e.pointerId);
+    }
+    e.preventDefault();
+    if (scrollRef.current) scrollRef.current.scrollLeft = pan.current.startScroll - dx;
+  }
+
+  function endPan(e: React.PointerEvent) {
+    if (pan.current.active && scrollRef.current?.hasPointerCapture(e.pointerId)) {
+      scrollRef.current.releasePointerCapture(e.pointerId);
+    }
+    pan.current.active = false;
+    setGrabbing(false);
+  }
+
+  // Suprime o clique que segue um pan, para não selecionar a iniciativa por engano.
+  function onClickCapture(e: React.MouseEvent) {
+    if (pan.current.moved) {
+      e.stopPropagation();
+      e.preventDefault();
+      pan.current.moved = false;
+    }
+  }
 
   const grouped: Record<string, Item[]> = {
     "em-andamento": items.filter(i => i.status === "em-andamento"),
@@ -153,22 +214,40 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
     onReorder(targetItem.status, group.map(i => i.id));
   }
 
+  const { months, quarters, totalMonths, todayFrac, todayInRange, todayLabel } = timeline;
+  // Cada coluna de mês tem ~64px; garante que a timeline seja larga o bastante
+  // para rolar/arrastar mesmo com muitos meses.
+  const innerMinWidth = LABEL_W + totalMonths * 64;
+
   return (
     <div ref={innerRef} style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0" }}>
-      <div style={{ overflowX: "auto" }}>
-        <div style={{ minWidth: 860 }}>
+      <div
+        ref={scrollRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
+        onClickCapture={onClickCapture}
+        style={{
+          overflowX: "auto",
+          cursor: grabbing ? "grabbing" : "grab",
+          touchAction: "pan-y",
+          userSelect: grabbing ? "none" : "auto",
+        }}
+      >
+        <div style={{ minWidth: innerMinWidth }}>
           {/* Quarter header */}
           <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#fff" }}>
-            <div style={{ width: LABEL_W, minWidth: LABEL_W, padding: "10px 16px", borderRight: "1px solid #e2e8f0" }}>
+            <div style={{ width: LABEL_W, minWidth: LABEL_W, padding: "10px 16px", borderRight: "1px solid #e2e8f0", position: "sticky", left: 0, zIndex: 20, background: "#fff" }}>
               <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Iniciativa</span>
             </div>
             <div style={{ flex: 1, display: "flex" }}>
-              {QUARTERS.map(q => (
+              {quarters.map((q, qi) => (
                 <div key={q.label} style={{
                   width: `${q.span * COL_PCT}%`, padding: "10px 0",
                   textAlign: "center", fontSize: 11, fontWeight: 700, color: "#0f172a",
                   borderRight: "1px solid #e2e8f0",
-                  background: q.label.startsWith("Q3") || q.label.startsWith("Q1") ? "#f1f5f9" : "#fff",
+                  background: qi % 2 === 1 ? "#f1f5f9" : "#fff",
                 }}>{q.label}</div>
               ))}
             </div>
@@ -176,9 +255,9 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
 
           {/* Month header */}
           <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
-            <div style={{ width: LABEL_W, minWidth: LABEL_W, borderRight: "1px solid #e2e8f0" }}/>
+            <div style={{ width: LABEL_W, minWidth: LABEL_W, borderRight: "1px solid #e2e8f0", position: "sticky", left: 0, zIndex: 20, background: "#f8fafc" }}/>
             <div style={{ flex: 1, display: "flex" }}>
-              {MONTHS.map((m, i) => (
+              {months.map((m, i) => (
                 <div key={i} style={{
                   width: `${COL_PCT}%`, padding: "6px 0",
                   textAlign: "center", fontSize: 10, color: "#94a3b8",
@@ -198,6 +277,7 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                   <div style={{
                     width: LABEL_W, minWidth: LABEL_W, padding: "6px 16px",
                     borderRight: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 6,
+                    position: "sticky", left: 0, zIndex: 20, background: "#f1f5f9",
                   }}>
                     <div style={{ width: 7, height: 7, borderRadius: "50%", background: meta.color }}/>
                     <span style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.07em" }}>
@@ -205,7 +285,9 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                     </span>
                   </div>
                   <div style={{ flex: 1, position: "relative" }}>
-                    <div style={{ position: "absolute", left: `${TODAY_FRAC * COL_PCT}%`, top: 0, bottom: 0, width: 1.5, background: "#ef4444", opacity: 0.4 }}/>
+                    {todayInRange && (
+                      <div style={{ position: "absolute", left: `${todayFrac * COL_PCT}%`, top: 0, bottom: 0, width: 1.5, background: "#ef4444", opacity: 0.4 }}/>
+                    )}
                   </div>
                 </div>
 
@@ -213,15 +295,9 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                   const dep = item.dependencyId ? items.find(i => i.id === item.dependencyId) : null;
                   const risk = calcRisk(item);
                   const isDragOver = dragOverId === item.id;
+                  const rowBg = isDragOver ? "#eef2ff" : risk === "critico" ? "#fff7f7" : "#fff";
                   return (
                     <div key={item.id}
-                      draggable={!!onReorder}
-                      onDragStart={(e) => {
-                        if (!onReorder) return;
-                        draggingId.current = item.id;
-                        draggingStatus.current = item.status;
-                        e.dataTransfer.effectAllowed = "move";
-                      }}
                       onDragOver={(e) => {
                         if (!onReorder) return;
                         if (draggingStatus.current !== item.status) return;
@@ -231,12 +307,11 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                       }}
                       onDragLeave={() => { if (dragOverId === item.id) setDragOverId(null); }}
                       onDrop={(e) => { e.preventDefault(); handleDrop(item); }}
-                      onDragEnd={() => { draggingId.current = null; draggingStatus.current = null; setDragOverId(null); }}
                       style={{
                         display: "flex", borderBottom: "1px solid #f1f5f9",
-                        background: isDragOver ? "#eef2ff" : risk === "critico" ? "#fff7f7" : "#fff",
+                        background: rowBg,
                         borderTop: isDragOver ? "2px solid #6366f1" : undefined,
-                        cursor: onSelect ? "pointer" : onReorder ? "grab" : "default",
+                        cursor: onSelect ? "pointer" : "default",
                       }}
                       onClick={() => onSelect && onSelect(item)}
                     >
@@ -246,7 +321,25 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                         borderLeft: risk === "critico" ? "3px solid #dc2626"
                                   : risk === "alerta" ? "3px solid #d97706"
                                   : "3px solid transparent",
+                        display: "flex", gap: 6, alignItems: "flex-start",
+                        position: "sticky", left: 0, zIndex: 20, background: rowBg,
                       }}>
+                        {onReorder && (
+                          <span
+                            data-reorder-handle
+                            draggable
+                            onDragStart={(e) => {
+                              draggingId.current = item.id;
+                              draggingStatus.current = item.status;
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
+                            onDragEnd={() => { draggingId.current = null; draggingStatus.current = null; setDragOverId(null); }}
+                            onClick={(e) => e.stopPropagation()}
+                            title="Arraste para reordenar"
+                            style={{ cursor: "grab", color: "#cbd5e1", marginTop: 1, flexShrink: 0, display: "inline-flex" }}
+                          ><GripVertical size={14} aria-hidden /></span>
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 4 }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a", lineHeight: 1.3, flex: 1 }}>{item.title}</div>
                           {item.epicUrl && (
@@ -290,14 +383,17 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
                           </div>
                         )}
                         <ExtDepTag item={item}/>
+                        </div>
                       </div>
 
                       <div style={{ flex: 1, position: "relative", padding: "8px 0", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                        {MONTHS.map((_, i) => (
+                        {months.map((_, i) => (
                           <div key={i} style={{ position: "absolute", left: `${i * COL_PCT}%`, top: 0, bottom: 0, width: 1, background: "#f1f5f9" }}/>
                         ))}
-                        <div style={{ position: "absolute", left: `${TODAY_FRAC * COL_PCT}%`, top: 0, bottom: 0, width: 1.5, background: "#ef4444", opacity: 0.3, zIndex: 2 }}/>
-                        <GanttBar item={item}/>
+                        {todayInRange && (
+                          <div style={{ position: "absolute", left: `${todayFrac * COL_PCT}%`, top: 0, bottom: 0, width: 1.5, background: "#ef4444", opacity: 0.3, zIndex: 2 }}/>
+                        )}
+                        <GanttBar item={item} timeline={timeline}/>
                       </div>
                     </div>
                   );
@@ -309,13 +405,15 @@ export default function Gantt({ items, onSelect, onReorder, innerRef }: Props) {
           {/* Today footer — altura própria para o badge não ser cortado pelo
               overflow:hidden do card */}
           <div style={{ display: "flex", borderTop: "1px solid #e2e8f0", background: "#fff", padding: "8px 0 16px" }}>
-            <div style={{ width: LABEL_W, minWidth: LABEL_W, borderRight: "1px solid #e2e8f0" }}/>
+            <div style={{ width: LABEL_W, minWidth: LABEL_W, borderRight: "1px solid #e2e8f0", position: "sticky", left: 0, zIndex: 20, background: "#fff" }}/>
             <div style={{ flex: 1, position: "relative", height: 22 }}>
-              <div style={{
-                position: "absolute", top: 0, left: `${TODAY_FRAC * COL_PCT}%`, transform: "translateX(-50%)",
-                background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700,
-                padding: "3px 7px", borderRadius: 4, whiteSpace: "nowrap",
-              }}>Hoje · {TODAY_LABEL}</div>
+              {todayInRange && (
+                <div style={{
+                  position: "absolute", top: 0, left: `${todayFrac * COL_PCT}%`, transform: "translateX(-50%)",
+                  background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700,
+                  padding: "3px 7px", borderRadius: 4, whiteSpace: "nowrap",
+                }}>Hoje · {todayLabel}</div>
+              )}
             </div>
           </div>
         </div>
