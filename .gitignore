@@ -11,3 +11,7 @@ e2e/test-results/
 
 # Backups locais do banco de dados (não versionar)
 backups/
+.claude/skills/
+.agents/skills/
+.hermes/skills/
+skills-lock.json
