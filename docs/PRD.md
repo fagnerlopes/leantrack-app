@@ -23,7 +23,7 @@ A aplicação está evoluindo de **um único roadmap compartilhado** para **vár
 
 - **Usuários (leitura + donos):** consultam qualquer roadmap, filtram por status/trimestre, exportam PDF/PNG; editam apenas os roadmaps que criaram.
 - **Diretoria (leitura):** consultam roadmaps e exportam visualizações para slides e relatórios.
-- **Administradores:** além do acima, gerenciam contas de usuários (criar/remover, definir papel).
+- **Administradores:** além do acima, gerenciam contas de usuários (criar/remover, definir papel, resetar senha).
 
 Tudo é protegido por autenticação; nada é público.
 
@@ -56,17 +56,25 @@ Tudo é protegido por autenticação; nada é público.
 - Reordenação por arrastar dentro do mesmo status; remoção com confirmação.
 
 ### Painel de usuários (`/admin/users`) — apenas role `admin`
-- Listar contas, criar usuário (nome, e-mail, senha inicial, papel), alterar papel (`user`/`admin`) e remover.
+- Listar contas, criar usuário (nome, e-mail, senha temporária, papel), alterar papel (`user`/`admin`), **resetar senha** e remover.
+- **Resetar senha** (ver ADR 015): como não há "Esqueci minha senha" por e-mail, o admin redefine a senha de qualquer usuário **sem informar a senha antiga**. Há um **gerador de senha temporária forte** (copiar/gerar-outra) e um alerta para salvar a senha no **Keeper**. A senha definida pelo admin (no reset ou na criação) é **temporária**: o usuário é **obrigado a trocá-la no primeiro acesso**.
 - Proteções: não é possível remover a própria conta nem rebaixar/remover o último admin.
 
 ### Login (`/login`)
 - Email + senha.
 - Usuários criados via seed (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` no `.env`).
 - Sessão por cookie HttpOnly, válida por 7 dias.
+- **Não há fluxo de "Esqueci minha senha"** (decisão consciente — evita contratar SMTP); a recuperação de acesso é feita pelo admin via reset de senha.
+
+### Troca obrigatória de senha (`/trocar-senha`)
+- No primeiro acesso após o admin definir/resetar a senha, o usuário cai numa **tela bloqueante**: não navega no app até escolher uma nova senha. Exibe alerta para salvar a senha no **Keeper**.
+
+### Política de senha (toda a aplicação)
+- Mínimo de **12 caracteres**, com **maiúscula, minúscula, número e símbolo**. Validada no servidor e no cliente.
 
 ### Perfil (`/perfil`) — qualquer usuário autenticado
 - Acessível pelo **menu do usuário** (avatar com as iniciais do nome) no canto superior direito, com atalhos para **Perfil** e **Sair**.
-- O usuário altera o **próprio nome** e, opcionalmente, define uma **nova senha** (mín. 8 caracteres, com campo de confirmação e botão mostrar/ocultar). Campo de senha em branco mantém a senha atual.
+- O usuário altera o **próprio nome** e, opcionalmente, define uma **nova senha** (conforme a política acima, com campo de confirmação, botão mostrar/ocultar e alerta de Keeper). Campo de senha em branco mantém a senha atual.
 - O e-mail é somente leitura.
 
 ## Fluxos do usuário
@@ -74,7 +82,7 @@ Tudo é protegido por autenticação; nada é público.
 1. **Diretoria entra para apresentar o roadmap:** faz login → escolhe o roadmap em "Todos os roadmaps" → abre o Gantt (modo leitura) → filtra por trimestre → clica "Exportar PDF" → cola no deck.
 2. **PM/Tech Lead atualiza o próprio roadmap:** em "Meus roadmaps" abre o seu roadmap (modo edição) → clica numa iniciativa → ajusta progresso, datas, dependência externa → salva; ou cria uma nova iniciativa. Quem consultar o roadmap vê a atualização ao recarregar.
 3. **Novo setor começa a usar:** cria "+ Novo roadmap" (ex.: "Roadmap VPS 2026"), que abre em modo edição para cadastrar as iniciativas.
-4. **Admin gerencia acesso:** abre "Usuários", cria a conta do novo PM com papel `user` e informa a senha inicial.
+4. **Admin gerencia acesso:** abre "Usuários", cria a conta do novo PM com papel `user`, gera uma senha temporária e a repassa pelo Keeper; no primeiro login o PM é obrigado a trocá-la. Se alguém esquece a senha, o admin usa "Resetar senha".
 
 ## Requisitos não funcionais
 

@@ -55,12 +55,13 @@ type Session struct {
 }
 
 type User struct {
-	ID           int64              `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash *string            `json:"password_hash"`
-	Name         string             `json:"name"`
-	Role         string             `json:"role"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	AuthProvider string             `json:"auth_provider"`
-	ExternalID   *string            `json:"external_id"`
+	ID                 int64              `json:"id"`
+	Email              string             `json:"email"`
+	PasswordHash       *string            `json:"password_hash"`
+	Name               string             `json:"name"`
+	Role               string             `json:"role"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	AuthProvider       string             `json:"auth_provider"`
+	ExternalID         *string            `json:"external_id"`
+	MustChangePassword bool               `json:"must_change_password"`
 }

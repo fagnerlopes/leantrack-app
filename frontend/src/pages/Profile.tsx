@@ -3,6 +3,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import AppHeader from "../components/AppHeader";
 import Toast from "../components/Toast";
+import { validatePassword, PASSWORD_POLICY_MSG } from "../lib/password";
 
 export default function Profile() {
   const { user, updateUser } = useAuth();
@@ -21,7 +22,8 @@ export default function Profile() {
     setErr(null);
     if (!name.trim()) { setErr("Informe seu nome"); return; }
     if (password) {
-      if (password.length < 8) { setErr("A nova senha deve ter ao menos 8 caracteres"); return; }
+      const msg = validatePassword(password);
+      if (msg) { setErr(msg); return; }
       if (password !== confirm) { setErr("As senhas não conferem"); return; }
     }
     setBusy(true);
@@ -67,7 +69,7 @@ export default function Profile() {
                 type={show ? "text" : "password"}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="Mínimo de 8 caracteres"
+                placeholder="Mínimo de 12 caracteres"
                 autoComplete="new-password"
                 style={{ ...input, paddingRight: 70 }}
               />
@@ -85,6 +87,15 @@ export default function Profile() {
               autoComplete="new-password"
               style={input}
             />
+
+            <div style={rule}>{PASSWORD_POLICY_MSG}</div>
+
+            {password && (
+              <div style={keeperBox}>
+                <span style={{ fontSize: 15, lineHeight: 1 }}>🔑</span>
+                <div>Salve a nova senha no <strong>Keeper</strong> antes de continuar — não há recuperação de senha por e-mail.</div>
+              </div>
+            )}
           </section>
 
           {err && <div style={errBox}>{err}</div>}
@@ -112,6 +123,12 @@ const lbl: React.CSSProperties = {
   letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6,
 };
 const hint: React.CSSProperties = { fontSize: 12, color: "#94a3b8", marginTop: 6 };
+const rule: React.CSSProperties = { fontSize: 11.5, color: "#94a3b8", marginTop: 10 };
+const keeperBox: React.CSSProperties = {
+  display: "flex", gap: 8, alignItems: "flex-start", marginTop: 12, padding: "10px 12px",
+  background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8,
+  fontSize: 12, color: "#92400e", lineHeight: 1.45,
+};
 const input: React.CSSProperties = {
   width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0",
   fontSize: 14, outline: "none", background: "#f8fafc", color: "#0f172a", boxSizing: "border-box",

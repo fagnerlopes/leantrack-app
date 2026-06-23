@@ -39,8 +39,8 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, password_hash, name, role, auth_provider)
-VALUES ($1, $2, $3, $4, 'local')
+INSERT INTO users (email, password_hash, name, role, auth_provider, must_change_password)
+VALUES ($1, $2, $3, $4, 'local', true)
 RETURNING id, email, name, role, auth_provider, created_at
 `
 
@@ -60,6 +60,9 @@ type CreateUserRow struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+// CreateUser registra uma conta com senha definida pelo admin. Como essa senha
+// é temporária (o admin não conhecerá a senha definitiva do usuário), a conta
+// nasce marcada para troca obrigatória no primeiro acesso.
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRow(ctx, createUser,
 		arg.Email,
@@ -107,19 +110,20 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT s.token, s.user_id, s.expires_at, u.email, u.name, u.role
+SELECT s.token, s.user_id, s.expires_at, u.email, u.name, u.role, u.must_change_password
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token = $1 AND s.expires_at > now()
 `
 
 type GetSessionRow struct {
-	Token     string             `json:"token"`
-	UserID    int64              `json:"user_id"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	Email     string             `json:"email"`
-	Name      string             `json:"name"`
-	Role      string             `json:"role"`
+	Token              string             `json:"token"`
+	UserID             int64              `json:"user_id"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	Email              string             `json:"email"`
+	Name               string             `json:"name"`
+	Role               string             `json:"role"`
+	MustChangePassword bool               `json:"must_change_password"`
 }
 
 func (q *Queries) GetSession(ctx context.Context, token string) (GetSessionRow, error) {
@@ -132,23 +136,25 @@ func (q *Queries) GetSession(ctx context.Context, token string) (GetSessionRow, 
 		&i.Email,
 		&i.Name,
 		&i.Role,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, name, role, created_at
+SELECT id, email, password_hash, name, role, must_change_password, created_at
 FROM users
 WHERE email = $1
 `
 
 type GetUserByEmailRow struct {
-	ID           int64              `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash *string            `json:"password_hash"`
-	Name         string             `json:"name"`
-	Role         string             `json:"role"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID                 int64              `json:"id"`
+	Email              string             `json:"email"`
+	PasswordHash       *string            `json:"password_hash"`
+	Name               string             `json:"name"`
+	Role               string             `json:"role"`
+	MustChangePassword bool               `json:"must_change_password"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -160,6 +166,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.PasswordHash,
 		&i.Name,
 		&i.Role,
+		&i.MustChangePassword,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -234,6 +241,23 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const resetUserPassword = `-- name: ResetUserPassword :exec
+UPDATE users SET password_hash = $2, must_change_password = true WHERE id = $1
+`
+
+type ResetUserPasswordParams struct {
+	ID           int64   `json:"id"`
+	PasswordHash *string `json:"password_hash"`
+}
+
+// ResetUserPassword (admin) define uma senha temporária para outro usuário e
+// marca a conta para troca obrigatória no próximo acesso. Não exige a senha
+// antiga — é a alternativa ao fluxo de "esqueci minha senha".
+func (q *Queries) ResetUserPassword(ctx context.Context, arg ResetUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, resetUserPassword, arg.ID, arg.PasswordHash)
+	return err
 }
 
 const searchUsersForRoadmap = `-- name: SearchUsersForRoadmap :many
@@ -333,7 +357,7 @@ func (q *Queries) UpdateOwnName(ctx context.Context, arg UpdateOwnNameParams) (U
 }
 
 const updateOwnPassword = `-- name: UpdateOwnPassword :exec
-UPDATE users SET password_hash = $2 WHERE id = $1
+UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1
 `
 
 type UpdateOwnPasswordParams struct {
@@ -341,7 +365,9 @@ type UpdateOwnPasswordParams struct {
 	PasswordHash *string `json:"password_hash"`
 }
 
-// UpdateOwnPassword define um novo hash de senha para a própria conta.
+// UpdateOwnPassword define um novo hash de senha para a própria conta e
+// desliga a obrigatoriedade de troca: ao escolher a senha, o usuário cumpriu a
+// exigência do primeiro acesso.
 func (q *Queries) UpdateOwnPassword(ctx context.Context, arg UpdateOwnPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateOwnPassword, arg.ID, arg.PasswordHash)
 	return err

@@ -284,24 +284,121 @@ func TestUpdateProfile(t *testing.T) {
 		t.Fatalf("nome vazio deveria ser 400, veio %d", resp.StatusCode)
 	}
 
-	// Senha curta (< 8) → 400.
+	// Senha que não atende à política (curta, sem complexidade) → 400.
 	resp, _ = doReq(t, srv, http.MethodPut, "/api/auth/me", cookie, map[string]string{"name": "Nome Novo", "password": "1234567"})
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("senha curta deveria ser 400, veio %d", resp.StatusCode)
+		t.Fatalf("senha fraca deveria ser 400, veio %d", resp.StatusCode)
 	}
 
-	// Nova senha válida → 200 e a nova senha passa a valer (a antiga não).
-	resp, _ = doReq(t, srv, http.MethodPut, "/api/auth/me", cookie, map[string]string{"name": "Nome Novo", "password": "novaSenha123"})
+	// Nova senha válida (12+ com complexidade) → 200 e passa a valer (a antiga não).
+	resp, _ = doReq(t, srv, http.MethodPut, "/api/auth/me", cookie, map[string]string{"name": "Nome Novo", "password": "NovaSenha123!"})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("nova senha válida deveria ser 200, veio %d", resp.StatusCode)
 	}
 	u2, _ := q.GetUserByEmail(context.Background(), "perfil@test.local")
-	if !auth.CheckPassword(*u2.PasswordHash, "novaSenha123") {
+	if !auth.CheckPassword(*u2.PasswordHash, "NovaSenha123!") {
 		t.Fatal("a nova senha deveria valer após a atualização")
 	}
 	if auth.CheckPassword(*u2.PasswordHash, "senha-teste") {
 		t.Fatal("a senha antiga não deveria mais valer após a troca")
 	}
+}
+
+// TestAdminResetPasswordFlow cobre o ciclo completo da senha definida pelo
+// admin: criação (já marca troca obrigatória), login carregando a marca, troca
+// da senha pelo usuário (limpa a marca) e reset pelo admin (marca de novo).
+func TestAdminResetPasswordFlow(t *testing.T) {
+	srv, q := newTestServer(t)
+	admin := loginAs(t, q, "chefe@test.local", "admin")
+	ctx := context.Background()
+
+	// 1) Admin cria o usuário com uma senha temporária forte.
+	resp, data := doReq(t, srv, http.MethodPost, "/api/admin/users", admin,
+		map[string]string{"name": "Novo", "email": "novo@test.local", "password": "TempSenha123!", "role": "user"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("criar usuário deveria ser 201, veio %d (%s)", resp.StatusCode, data)
+	}
+	var created userDTO
+	if err := json.Unmarshal(data, &created); err != nil {
+		t.Fatalf("decode user: %v", err)
+	}
+
+	// Senha fraca na criação → 400.
+	resp, _ = doReq(t, srv, http.MethodPost, "/api/admin/users", admin,
+		map[string]string{"name": "Fraco", "email": "fraco@test.local", "password": "123", "role": "user"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("senha fraca na criação deveria ser 400, veio %d", resp.StatusCode)
+	}
+
+	// 2) A conta nasce marcada para troca obrigatória.
+	u, _ := q.GetUserByEmail(ctx, "novo@test.local")
+	if !u.MustChangePassword {
+		t.Fatal("usuário criado pelo admin deveria nascer com must_change_password=true")
+	}
+
+	// 3) Login carrega a marca no JSON da sessão.
+	resp, data = doReq(t, srv, http.MethodPost, "/api/auth/login", nil,
+		map[string]string{"email": "novo@test.local", "password": "TempSenha123!"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login deveria ser 200, veio %d (%s)", resp.StatusCode, data)
+	}
+	var sess auth.SessionUser
+	_ = json.Unmarshal(data, &sess)
+	if !sess.MustChangePassword {
+		t.Fatal("login deveria reportar mustChangePassword=true")
+	}
+	cookie := resp.Cookies()[0]
+
+	// 4) O usuário troca a senha → 200 e a marca é limpa.
+	resp, data = doReq(t, srv, http.MethodPost, "/api/auth/change-password", cookie,
+		map[string]string{"password": "MinhaSenha456@"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("troca de senha deveria ser 200, veio %d (%s)", resp.StatusCode, data)
+	}
+	u, _ = q.GetUserByEmail(ctx, "novo@test.local")
+	if u.MustChangePassword {
+		t.Fatal("após a troca, must_change_password deveria ser false")
+	}
+	if !auth.CheckPassword(*u.PasswordHash, "MinhaSenha456@") {
+		t.Fatal("a nova senha escolhida deveria valer")
+	}
+
+	// 5) Admin reseta a senha → marca de troca volta a true.
+	resp, data = doReq(t, srv, http.MethodPut, "/api/admin/users/"+itoa(created.ID)+"/password", admin,
+		map[string]string{"password": "ResetSenha789#"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reset deveria ser 200, veio %d (%s)", resp.StatusCode, data)
+	}
+	u, _ = q.GetUserByEmail(ctx, "novo@test.local")
+	if !u.MustChangePassword {
+		t.Fatal("após o reset do admin, must_change_password deveria ser true")
+	}
+	if !auth.CheckPassword(*u.PasswordHash, "ResetSenha789#") {
+		t.Fatal("a senha temporária do reset deveria valer")
+	}
+
+	// Reset com senha fraca → 400.
+	resp, _ = doReq(t, srv, http.MethodPut, "/api/admin/users/"+itoa(created.ID)+"/password", admin,
+		map[string]string{"password": "fraca"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("reset com senha fraca deveria ser 400, veio %d", resp.StatusCode)
+	}
+}
+
+// TestResetPasswordRequiresAdmin garante que um usuário comum não pode resetar
+// a senha de ninguém.
+func TestResetPasswordRequiresAdmin(t *testing.T) {
+	srv, q := newTestServer(t)
+	user := loginAs(t, q, "comum@test.local", "user")
+	target := loginAs(t, q, "alvo@test.local", "user")
+	tgt, _ := q.GetUserByEmail(context.Background(), "alvo@test.local")
+
+	resp, _ := doReq(t, srv, http.MethodPut, "/api/admin/users/"+itoa(tgt.ID)+"/password", user,
+		map[string]string{"password": "QualquerSenha1!"})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("não-admin resetando senha deveria ser 403, veio %d", resp.StatusCode)
+	}
+	_ = target
 }
 
 func TestUpdateProfileRequiresAuth(t *testing.T) {

@@ -202,3 +202,21 @@ ADR: 014 (timeline dinâmica derivada das datas das iniciativas)
 | Task | Status | Notas |
 |------|--------|-------|
 | Reordenar só pela célula do título (sem conflito com o pan) | Done | A célula do título virou o puxador (`draggable` + `data-reorder-handle`), excluída do pan via `isInteractive`; o ícone ⋮⋮ ficou só como pista visual. Arrastar o título reordena; arrastar o gráfico navega no tempo. Verificado por DnD nativo: ordem do grupo "Não iniciado" muda na hora; pan segue funcionando (scrollLeft 215→0) |
+
+## Sessão 23/06/2026 — Reset de senha pelo admin e troca obrigatória
+
+ADR: 015 (reset de senha pelo admin, política única e troca obrigatória no 1º acesso)
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Migração `008_must_change_password.sql` | Done | `users.must_change_password BOOLEAN NOT NULL DEFAULT false`; aditiva e idempotente — usuários/admins existentes seguem usando a senha atual |
+| Política única de senha (12+ com complexidade) | Done | `auth.ValidatePassword` (back) e `lib/password.ts` (front): mín. 12 + maiúscula/minúscula/número/símbolo, teto 72 bytes (bcrypt). Substitui as regras divergentes de 8 (perfil) e 6 (criação) |
+| Endpoint admin de reset | Done | `PUT /api/admin/users/{id}/password` (RequireAdmin): define senha temporária, sem senha antiga, e marca `must_change_password=true`. Query `ResetUserPassword` |
+| Endpoint de troca própria | Done | `POST /api/auth/change-password` (autenticado): define nova senha e limpa a marca. `UpdateOwnName`/`UpdateOwnPassword` ajustados — `UpdateOwnPassword` agora zera a marca |
+| Criação já força troca | Done | `CreateUser` insere `must_change_password=true`; criação passou a usar a política forte |
+| Marca na sessão | Done | `SessionUser.mustChangePassword`; `GetUserByEmail` e `GetSession` retornam a coluna; login e `me` carregam o valor |
+| Gerador de senha temporária + UI | Done | `lib/password.ts:generatePassword` (Fisher–Yates com `crypto.getRandomValues`, sem 0/1/I/O/l). Botão "Resetar senha" por linha em `Users.tsx` + `ResetPasswordModal` (copiar/gerar-outra/Keeper); gerador também no modal de criação |
+| Tela bloqueante `/trocar-senha` | Done | `ForcePasswordChange.tsx` + guard no `App.tsx`: enquanto `mustChangePassword`, qualquer rota redireciona para lá; só libera o app após definir a senha. Alerta de Keeper em destaque |
+| Alerta de Keeper nas trocas | Done | Tela de 1º acesso, modais de reset/criação e seção de senha do Perfil orientam salvar a senha no Keeper (não há recuperação por e-mail) |
+| Testes | Done | Back: `auth.ValidatePassword` (tabela) + integração `TestAdminResetPasswordFlow`/`TestResetPasswordRequiresAdmin`; `TestUpdateProfile` migrado p/ a política nova. Front: `lib/password.test.ts`, `ForcePasswordChange.test.tsx`, reset em `Users.test.tsx`, `Profile.test.tsx` migrado. `go test ./...` verde; 50/50 Vitest; `tsc -b` limpo |
+| Verificação visual (Playwright) | Done | 5 screenshots: lista com "Resetar senha", modal de reset (senha gerada + Keeper), modal de criação, Perfil com alerta Keeper, e a tela bloqueante `/trocar-senha` (login do alvo redireciona corretamente) |

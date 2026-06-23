@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +48,35 @@ func TestPasswordHashAndCheck(t *testing.T) {
 	}
 	if CheckPassword(h, "wrong") {
 		t.Fatal("expected wrong password to fail")
+	}
+}
+
+func TestValidatePassword(t *testing.T) {
+	cases := []struct {
+		name    string
+		pw      string
+		wantErr bool
+	}{
+		{"forte válida", "Kf7!mze2Qx#p", false},
+		{"curta demais", "Ab1!xyz", true},
+		{"sem maiúscula", "kf7!mze2qx#p", true},
+		{"sem minúscula", "KF7!MZE2QX#P", true},
+		{"sem número", "Kfa!mzeQxx#p", true},
+		{"sem símbolo", "Kf7mze2Qx0pa", true},
+		{"12 com todas as classes", "Aa1!aaaaaaaa", false},
+		{"longa demais (>72)", "Aa1!" + strings.Repeat("z", 80), true},
+		{"espaço não conta como símbolo", "Aa1 aaaa aaaa", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidatePassword(c.pw)
+			if c.wantErr && err == nil {
+				t.Fatalf("esperava erro para %q", c.pw)
+			}
+			if !c.wantErr && err != nil {
+				t.Fatalf("erro inesperado para %q: %v", c.pw, err)
+			}
+		})
 	}
 }
 

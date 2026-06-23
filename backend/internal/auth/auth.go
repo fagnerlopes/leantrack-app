@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"unicode"
 
 	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/database/sqlc"
 	"github.com/jackc/pgx/v5"
@@ -28,10 +29,11 @@ type ctxKey int
 const userKey ctxKey = 1
 
 type SessionUser struct {
-	ID    int64  `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Role  string `json:"role"`
+	ID                 int64  `json:"id"`
+	Email              string `json:"email"`
+	Name               string `json:"name"`
+	Role               string `json:"role"`
+	MustChangePassword bool   `json:"mustChangePassword"`
 }
 
 func HashPassword(p string) (string, error) {
@@ -41,6 +43,44 @@ func HashPassword(p string) (string, error) {
 
 func CheckPassword(hash, p string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(p)) == nil
+}
+
+// PasswordMinLen é o tamanho mínimo exigido pela política de senha da aplicação.
+const PasswordMinLen = 12
+
+// PasswordPolicyMsg descreve, em uma frase, a regra de senha. Usado tanto nas
+// mensagens de erro do backend quanto como referência para o frontend.
+const PasswordPolicyMsg = "a senha deve ter ao menos 12 caracteres, com letra maiúscula, minúscula, número e símbolo"
+
+// ValidatePassword aplica a política única de senha da aplicação: mínimo de 12
+// caracteres contendo maiúscula, minúscula, número e símbolo. bcrypt trunca em
+// 72 bytes, então recusamos senhas acima desse limite para evitar surpresas.
+func ValidatePassword(pw string) error {
+	if len(pw) > 72 {
+		return errors.New("a senha é longa demais (máx. 72 caracteres)")
+	}
+	if len([]rune(pw)) < PasswordMinLen {
+		return errors.New(PasswordPolicyMsg)
+	}
+	var hasUpper, hasLower, hasDigit, hasSymbol bool
+	for _, r := range pw {
+		switch {
+		case unicode.IsUpper(r):
+			hasUpper = true
+		case unicode.IsLower(r):
+			hasLower = true
+		case unicode.IsDigit(r):
+			hasDigit = true
+		case unicode.IsSpace(r):
+			// Espaços não contam como símbolo válido.
+		default:
+			hasSymbol = true
+		}
+	}
+	if !hasUpper || !hasLower || !hasDigit || !hasSymbol {
+		return errors.New(PasswordPolicyMsg)
+	}
+	return nil
 }
 
 func NewToken() (string, error) {
@@ -125,7 +165,7 @@ func (a LocalAuthenticator) UserFromRequest(r *http.Request) (*SessionUser, erro
 	if err != nil {
 		return nil, ErrNoSession
 	}
-	return &SessionUser{ID: row.UserID, Email: row.Email, Name: row.Name, Role: row.Role}, nil
+	return &SessionUser{ID: row.UserID, Email: row.Email, Name: row.Name, Role: row.Role, MustChangePassword: row.MustChangePassword}, nil
 }
 
 // NewMiddleware injeta o usuário resolvido pelo Authenticator no contexto.

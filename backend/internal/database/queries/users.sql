@@ -1,5 +1,5 @@
 -- name: GetUserByEmail :one
-SELECT id, email, password_hash, name, role, created_at
+SELECT id, email, password_hash, name, role, must_change_password, created_at
 FROM users
 WHERE email = $1;
 
@@ -30,9 +30,12 @@ SELECT id, email, name, role, auth_provider, created_at
 FROM users
 ORDER BY name ASC;
 
+-- CreateUser registra uma conta com senha definida pelo admin. Como essa senha
+-- é temporária (o admin não conhecerá a senha definitiva do usuário), a conta
+-- nasce marcada para troca obrigatória no primeiro acesso.
 -- name: CreateUser :one
-INSERT INTO users (email, password_hash, name, role, auth_provider)
-VALUES ($1, $2, $3, $4, 'local')
+INSERT INTO users (email, password_hash, name, role, auth_provider, must_change_password)
+VALUES ($1, $2, $3, $4, 'local', true)
 RETURNING id, email, name, role, auth_provider, created_at;
 
 -- name: DeleteUser :exec
@@ -65,16 +68,24 @@ LIMIT 10;
 UPDATE users SET name = $2 WHERE id = $1
 RETURNING id, email, name, role, auth_provider, created_at;
 
--- UpdateOwnPassword define um novo hash de senha para a própria conta.
+-- UpdateOwnPassword define um novo hash de senha para a própria conta e
+-- desliga a obrigatoriedade de troca: ao escolher a senha, o usuário cumpriu a
+-- exigência do primeiro acesso.
 -- name: UpdateOwnPassword :exec
-UPDATE users SET password_hash = $2 WHERE id = $1;
+UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1;
+
+-- ResetUserPassword (admin) define uma senha temporária para outro usuário e
+-- marca a conta para troca obrigatória no próximo acesso. Não exige a senha
+-- antiga — é a alternativa ao fluxo de "esqueci minha senha".
+-- name: ResetUserPassword :exec
+UPDATE users SET password_hash = $2, must_change_password = true WHERE id = $1;
 
 -- name: CreateSession :exec
 INSERT INTO sessions (token, user_id, expires_at)
 VALUES ($1, $2, $3);
 
 -- name: GetSession :one
-SELECT s.token, s.user_id, s.expires_at, u.email, u.name, u.role
+SELECT s.token, s.user_id, s.expires_at, u.email, u.name, u.role, u.must_change_password
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token = $1 AND s.expires_at > now();

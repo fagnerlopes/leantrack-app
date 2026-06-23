@@ -1,4 +1,4 @@
-export type User = { id: number; email: string; name: string; role: string };
+export type User = { id: number; email: string; name: string; role: string; mustChangePassword: boolean };
 
 export type Roadmap = {
   id: number;
@@ -85,6 +85,10 @@ export const api = {
   // Atualiza o próprio perfil. password vazio/omitido = mantém a senha atual.
   updateProfile: (input: { name: string; password?: string }) =>
     req<User>("/api/auth/me", { method: "PUT", body: JSON.stringify(input) }),
+  // Define uma nova senha para a própria conta (sem exigir a senha antiga).
+  // Usado na tela de troca obrigatória do primeiro acesso.
+  changePassword: (password: string) =>
+    req<User>("/api/auth/change-password", { method: "POST", body: JSON.stringify({ password }) }),
 
   // Roadmaps
   listRoadmaps: (mine = false) =>
@@ -130,4 +134,8 @@ export const api = {
     req<void>(`/api/admin/users/${id}`, { method: "DELETE" }),
   updateUserRole: (id: number, role: string) =>
     req<AdminUser>(`/api/admin/users/${id}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
+  // Admin define uma senha temporária para o usuário; ele será obrigado a
+  // trocá-la no próximo acesso.
+  resetUserPassword: (id: number, password: string) =>
+    req<AdminUser>(`/api/admin/users/${id}/password`, { method: "PUT", body: JSON.stringify({ password }) }),
 };

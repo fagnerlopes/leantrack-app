@@ -97,6 +97,7 @@ func (h *Handler) Routes() http.Handler {
 
 	mux.Handle("GET /api/auth/me", authM(http.HandlerFunc(h.me)))
 	mux.Handle("PUT /api/auth/me", authM(http.HandlerFunc(h.updateProfile)))
+	mux.Handle("POST /api/auth/change-password", authM(http.HandlerFunc(h.changePassword)))
 
 	// Roadmaps (endereçados por id; leitura aberta a qualquer logado).
 	mux.Handle("GET /api/roadmaps", authM(http.HandlerFunc(h.listRoadmaps)))
@@ -126,6 +127,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /api/admin/users", adminM(http.HandlerFunc(h.createUser)))
 	mux.Handle("DELETE /api/admin/users/{id}", adminM(http.HandlerFunc(h.deleteUser)))
 	mux.Handle("PUT /api/admin/users/{id}/role", adminM(http.HandlerFunc(h.updateUserRole)))
+	mux.Handle("PUT /api/admin/users/{id}/password", adminM(http.HandlerFunc(h.resetUserPassword)))
 
 	// Dev-only login
 	if h.Cfg.DevMode {
@@ -168,7 +170,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	secure := strings.HasPrefix(h.Cfg.BaseURL, "https://")
 	auth.SetCookie(w, tok, exp, secure)
-	writeJSON(w, http.StatusOK, auth.SessionUser{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role})
+	writeJSON(w, http.StatusOK, auth.SessionUser{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, MustChangePassword: u.MustChangePassword})
 }
 
 func (h *Handler) devLogin(w http.ResponseWriter, r *http.Request) {
@@ -251,9 +253,10 @@ func (h *Handler) updateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Senha é opcional: só altera quando preenchida.
+	mustChange := me.MustChangePassword
 	if req.Password != "" {
-		if len(req.Password) < 8 {
-			writeErr(w, http.StatusBadRequest, "a senha deve ter ao menos 8 caracteres")
+		if err := auth.ValidatePassword(req.Password); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		hash, err := auth.HashPassword(req.Password)
@@ -266,6 +269,7 @@ func (h *Handler) updateProfile(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusInternalServerError, "erro ao atualizar senha")
 			return
 		}
+		mustChange = false // escolher a senha cumpre a exigência de troca.
 	}
 	u, err := h.Q.UpdateOwnName(r.Context(), sqlc.UpdateOwnNameParams{ID: me.ID, Name: name})
 	if err != nil {
@@ -273,7 +277,43 @@ func (h *Handler) updateProfile(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "erro ao atualizar")
 		return
 	}
-	writeJSON(w, http.StatusOK, auth.SessionUser{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role})
+	writeJSON(w, http.StatusOK, auth.SessionUser{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, MustChangePassword: mustChange})
+}
+
+// changePassword troca a senha da própria conta sem exigir a senha antiga. É o
+// endpoint usado pela tela de troca obrigatória do primeiro acesso (e por
+// qualquer fluxo que só precise definir uma nova senha). Limpa a marca de
+// troca obrigatória via UpdateOwnPassword.
+type changePasswordReq struct {
+	Password string `json:"password"`
+}
+
+func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
+	me := auth.FromContext(r.Context())
+	if me == nil {
+		writeErr(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
+	var req changePasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao processar senha")
+		return
+	}
+	if err := h.Q.UpdateOwnPassword(r.Context(), sqlc.UpdateOwnPasswordParams{ID: me.ID, PasswordHash: &hash}); err != nil {
+		slog.Error("change password", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao atualizar senha")
+		return
+	}
+	writeJSON(w, http.StatusOK, auth.SessionUser{ID: me.ID, Email: me.Email, Name: me.Name, Role: me.Role, MustChangePassword: false})
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1164,8 +1204,8 @@ func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "e-mail inválido")
 		return
 	}
-	if len(req.Password) < 6 {
-		writeErr(w, http.StatusBadRequest, "senha deve ter ao menos 6 caracteres")
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if req.Role == "" {
@@ -1270,4 +1310,49 @@ func (h *Handler) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, userDTO{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, AuthProvider: u.AuthProvider})
+}
+
+// resetUserPassword (admin) define uma senha temporária para outro usuário, sem
+// exigir a senha antiga, e marca a conta para troca obrigatória no próximo
+// acesso. É a alternativa ao "esqueci minha senha": o admin gera uma senha
+// temporária, repassa ao usuário, e o usuário escolhe a definitiva ao entrar.
+type resetPasswordReq struct {
+	Password string `json:"password"`
+}
+
+func (h *Handler) resetUserPassword(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var req resetPasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	target, err := h.Q.GetUserByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "usuário não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar")
+		return
+	}
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao processar senha")
+		return
+	}
+	if err := h.Q.ResetUserPassword(r.Context(), sqlc.ResetUserPasswordParams{ID: id, PasswordHash: &hash}); err != nil {
+		slog.Error("reset user password", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao redefinir senha")
+		return
+	}
+	writeJSON(w, http.StatusOK, userDTO{ID: target.ID, Email: target.Email, Name: target.Name, Role: target.Role})
 }

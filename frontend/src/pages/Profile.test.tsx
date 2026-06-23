@@ -17,7 +17,7 @@ vi.mock("../auth", () => ({
 import Profile from "./Profile";
 
 const renderPage = () => render(<MemoryRouter><Profile /></MemoryRouter>);
-const pwdInput = () => screen.getByPlaceholderText("Mínimo de 8 caracteres") as HTMLInputElement;
+const pwdInput = () => screen.getByPlaceholderText("Mínimo de 12 caracteres") as HTMLInputElement;
 const confirmInput = () => screen.getByPlaceholderText("Repita a nova senha") as HTMLInputElement;
 const save = () => fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
@@ -33,25 +33,26 @@ describe("Profile", () => {
 
   it("envia a nova senha quando preenchida e confirmada", async () => {
     renderPage();
-    fireEvent.change(pwdInput(), { target: { value: "novaSenha123" } });
-    fireEvent.change(confirmInput(), { target: { value: "novaSenha123" } });
+    fireEvent.change(pwdInput(), { target: { value: "NovaSenha123!" } });
+    fireEvent.change(confirmInput(), { target: { value: "NovaSenha123!" } });
     save();
-    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ name: "Fagner Lopes", password: "novaSenha123" }));
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ name: "Fagner Lopes", password: "NovaSenha123!" }));
   });
 
-  it("bloqueia senha com menos de 8 caracteres", async () => {
+  it("bloqueia senha que não atende à política", async () => {
     renderPage();
     fireEvent.change(pwdInput(), { target: { value: "1234567" } });
     fireEvent.change(confirmInput(), { target: { value: "1234567" } });
     save();
-    await waitFor(() => expect(screen.getByText(/ao menos 8 caracteres/)).toBeInTheDocument());
-    expect(updateProfile).not.toHaveBeenCalled();
+    await waitFor(() => expect(updateProfile).not.toHaveBeenCalled());
+    // A regra aparece fixa e também no erro quando bloqueado.
+    expect(screen.getAllByText(/ao menos 12 caracteres/).length).toBeGreaterThanOrEqual(2);
   });
 
   it("bloqueia quando as senhas não conferem", async () => {
     renderPage();
-    fireEvent.change(pwdInput(), { target: { value: "novaSenha123" } });
-    fireEvent.change(confirmInput(), { target: { value: "outraSenha123" } });
+    fireEvent.change(pwdInput(), { target: { value: "NovaSenha123!" } });
+    fireEvent.change(confirmInput(), { target: { value: "OutraSenha123!" } });
     save();
     await waitFor(() => expect(screen.getByText(/não conferem/)).toBeInTheDocument());
     expect(updateProfile).not.toHaveBeenCalled();
