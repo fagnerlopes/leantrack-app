@@ -129,6 +129,10 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("PUT /api/admin/users/{id}/role", adminM(http.HandlerFunc(h.updateUserRole)))
 	mux.Handle("PUT /api/admin/users/{id}/password", adminM(http.HandlerFunc(h.resetUserPassword)))
 
+	// Administração de roadmaps (somente admin): destrava roadmaps órfãos.
+	mux.Handle("GET /api/admin/roadmaps", adminM(http.HandlerFunc(h.adminListRoadmaps)))
+	mux.Handle("PUT /api/admin/roadmaps/{id}/owner", adminM(http.HandlerFunc(h.adminTransferRoadmapOwner)))
+
 	// Dev-only login
 	if h.Cfg.DevMode {
 		mux.HandleFunc("POST /api/dev/login", h.devLogin)
@@ -724,6 +728,9 @@ func (h *Handler) listRoadmaps(w http.ResponseWriter, r *http.Request) {
 				canEdit, canShare = c.CanEdit, c.CanShare
 			}
 		}
+		// O admin gerencia o acesso de qualquer roadmap (ADR 016), sem ganhar
+		// permissão de editar o conteúdo.
+		canShare = canShare || u.Role == "admin"
 		return roadmapDTO{
 			ID: id, Name: name, Slug: slug, Description: desc,
 			OwnerID: ownerID, OwnerName: ownerName, ItemCount: count,
@@ -769,7 +776,7 @@ func (h *Handler) listSharedRoadmaps(w http.ResponseWriter, r *http.Request) {
 		out = append(out, roadmapDTO{
 			ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
 			OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, ItemCount: rm.ItemCount,
-			CanEdit: rm.CanEdit, CanShare: rm.CanShare,
+			CanEdit: rm.CanEdit, CanShare: rm.CanShare || u.Role == "admin",
 			CanDelete: false, IsOwner: false,
 		})
 	}
@@ -843,6 +850,8 @@ func (h *Handler) getRoadmap(w http.ResponseWriter, r *http.Request) {
 			canEdit, canShare = c.CanEdit, c.CanShare
 		}
 	}
+	// O admin gerencia o acesso de qualquer roadmap (ADR 016).
+	canShare = canShare || u.Role == "admin"
 	count, _ := h.Q.CountItemsByRoadmap(r.Context(), id)
 	writeJSON(w, http.StatusOK, roadmapDTO{
 		ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
@@ -1355,4 +1364,146 @@ func (h *Handler) resetUserPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, userDTO{ID: target.ID, Email: target.Email, Name: target.Name, Role: target.Role})
+}
+
+// ──────────────────────────────────────────────────────────────
+// Administração de roadmaps (RequireAdmin) — ver ADR 016
+//
+// Quando o dono de um roadmap deixa a empresa, o roadmap fica órfão: ninguém
+// consegue editá-lo nem conceder acesso a outra pessoa. O admin resolve isso
+// transferindo a propriedade e gerenciando os compartilhamentos.
+// ──────────────────────────────────────────────────────────────
+
+type adminRoadmapDTO struct {
+	ID                int64  `json:"id"`
+	Name              string `json:"name"`
+	Slug              string `json:"slug"`
+	Description       string `json:"description"`
+	OwnerID           int64  `json:"ownerId"`
+	OwnerName         string `json:"ownerName"`
+	OwnerEmail        string `json:"ownerEmail"`
+	ItemCount         int64  `json:"itemCount"`
+	CollaboratorCount int64  `json:"collaboratorCount"`
+}
+
+func (h *Handler) adminListRoadmaps(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.Q.AdminListRoadmaps(r.Context())
+	if err != nil {
+		slog.Error("admin list roadmaps", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao listar roadmaps")
+		return
+	}
+	out := make([]adminRoadmapDTO, 0, len(rows))
+	for _, rm := range rows {
+		out = append(out, adminRoadmapDTO{
+			ID: rm.ID, Name: rm.Name, Slug: rm.Slug, Description: rm.Description,
+			OwnerID: rm.OwnerID, OwnerName: rm.OwnerName, OwnerEmail: rm.OwnerEmail,
+			ItemCount: rm.ItemCount, CollaboratorCount: rm.CollaboratorCount,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type transferOwnerReq struct {
+	NewOwnerID int64 `json:"newOwnerId"`
+	// KeepPreviousAsCollaborator mantém o dono anterior com acesso de edição.
+	// Falso (padrão) é o caso de quem saiu da empresa: perde o acesso.
+	KeepPreviousAsCollaborator bool `json:"keepPreviousAsCollaborator"`
+}
+
+func (h *Handler) adminTransferRoadmapOwner(w http.ResponseWriter, r *http.Request) {
+	actor := auth.FromContext(r.Context())
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var req transferOwnerReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if req.NewOwnerID <= 0 {
+		writeErr(w, http.StatusBadRequest, "informe o novo dono")
+		return
+	}
+	rm, err := h.Q.GetRoadmapByID(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "roadmap não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar roadmap")
+		return
+	}
+	if req.NewOwnerID == rm.OwnerID {
+		writeErr(w, http.StatusBadRequest, "esse usuário já é o dono do roadmap")
+		return
+	}
+	newOwner, err := h.Q.GetUserByID(r.Context(), req.NewOwnerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "usuário não encontrado")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao carregar usuário")
+		return
+	}
+
+	// UNIQUE (owner_id, name): se o novo dono já tiver um roadmap homônimo, o
+	// UPDATE falharia. Barramos antes para dar uma mensagem clara ao admin.
+	if n, err := h.Q.CountRoadmapsByOwnerAndName(r.Context(), sqlc.CountRoadmapsByOwnerAndNameParams{
+		OwnerID: req.NewOwnerID, Name: rm.Name,
+	}); err == nil && n > 0 {
+		writeErr(w, http.StatusConflict, newOwner.Name+` já tem um roadmap chamado "`+rm.Name+`". Renomeie um dos dois antes de transferir.`)
+		return
+	}
+
+	previousOwnerID := rm.OwnerID
+	createdBy := actor.ID
+	// Concede o acesso ao dono anterior ANTES de transferir: se a transferência
+	// falhar, o vínculo é desfeito e nada muda.
+	if req.KeepPreviousAsCollaborator {
+		if _, err := h.Q.UpsertCollaborator(r.Context(), sqlc.UpsertCollaboratorParams{
+			RoadmapID: id, UserID: previousOwnerID,
+			CanEdit: true, CanShare: false, CreatedBy: &createdBy,
+		}); err != nil {
+			slog.Error("keep previous owner as collaborator", "err", err)
+			writeErr(w, http.StatusInternalServerError, "erro ao manter o dono anterior como colaborador")
+			return
+		}
+	}
+
+	updated, err := h.Q.TransferRoadmapOwner(r.Context(), sqlc.TransferRoadmapOwnerParams{
+		ID: id, OwnerID: req.NewOwnerID,
+	})
+	if err != nil {
+		if req.KeepPreviousAsCollaborator {
+			// Desfaz o vínculo criado acima: a transferência não aconteceu.
+			_ = h.Q.DeleteCollaborator(r.Context(), sqlc.DeleteCollaboratorParams{RoadmapID: id, UserID: previousOwnerID})
+		}
+		if isUniqueViolation(err) {
+			writeErr(w, http.StatusConflict, newOwner.Name+" já tem um roadmap com esse nome. Renomeie um dos dois antes de transferir.")
+			return
+		}
+		slog.Error("transfer roadmap owner", "err", err)
+		writeErr(w, http.StatusInternalServerError, "erro ao transferir a propriedade")
+		return
+	}
+
+	// O novo dono já tem acesso total: um vínculo de colaborador seria redundante
+	// e apareceria duplicado na lista de "pessoas com acesso".
+	if err := h.Q.DeleteCollaborator(r.Context(), sqlc.DeleteCollaboratorParams{RoadmapID: id, UserID: req.NewOwnerID}); err != nil {
+		slog.Error("drop collaborator row of new owner", "roadmap", id, "user", req.NewOwnerID, "err", err)
+	}
+
+	slog.Info("roadmap owner transferred", "roadmap", id, "from", previousOwnerID, "to", req.NewOwnerID, "by", actor.ID, "keptPrevious", req.KeepPreviousAsCollaborator)
+
+	count, _ := h.Q.CountItemsByRoadmap(r.Context(), id)
+	collabs, _ := h.Q.ListCollaboratorsByRoadmap(r.Context(), id)
+	writeJSON(w, http.StatusOK, adminRoadmapDTO{
+		ID: updated.ID, Name: updated.Name, Slug: updated.Slug, Description: updated.Description,
+		OwnerID: updated.OwnerID, OwnerName: newOwner.Name, OwnerEmail: newOwner.Email,
+		ItemCount: count, CollaboratorCount: int64(len(collabs)),
+	})
 }

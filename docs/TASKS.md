@@ -220,3 +220,26 @@ ADR: 015 (reset de senha pelo admin, política única e troca obrigatória no 1�
 | Alerta de Keeper nas trocas | Done | Tela de 1º acesso, modais de reset/criação e seção de senha do Perfil orientam salvar a senha no Keeper (não há recuperação por e-mail) |
 | Testes | Done | Back: `auth.ValidatePassword` (tabela) + integração `TestAdminResetPasswordFlow`/`TestResetPasswordRequiresAdmin`; `TestUpdateProfile` migrado p/ a política nova. Front: `lib/password.test.ts`, `ForcePasswordChange.test.tsx`, reset em `Users.test.tsx`, `Profile.test.tsx` migrado. `go test ./...` verde; 50/50 Vitest; `tsc -b` limpo |
 | Verificação visual (Playwright) | Done | 5 screenshots: lista com "Resetar senha", modal de reset (senha gerada + Keeper), modal de criação, Perfil com alerta Keeper, e a tela bloqueante `/trocar-senha` (login do alvo redireciona corretamente) |
+
+## Sessão 11/08/2026 — Admin transfere propriedade e gerencia compartilhamento
+
+ADR: 016 (admin transfere a propriedade de roadmaps e gerencia o compartilhamento)
+
+Motivação: colaboradores saíram da empresa e os roadmaps de que eram donos ficaram
+órfãos — ninguém consegue editá-los nem conceder acesso a um substituto.
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Queries `AdminListRoadmaps` / `TransferRoadmapOwner` / `CountRoadmapsByOwnerAndName` | Done | `queries/roadmaps.sql`; a listagem traz nome + **e-mail** do dono (identifica a conta de quem saiu) e as contagens de iniciativas e colaboradores. Sem migração — nenhuma coluna nova |
+| `GET /api/admin/roadmaps` | Done | RequireAdmin; lista todos os roadmaps ordenados por dono e nome |
+| `PUT /api/admin/roadmaps/{id}/owner` | Done | RequireAdmin; body `{newOwnerId, keepPreviousAsCollaborator}`. Remove o vínculo de colaborador do novo dono (evita duplicidade em "pessoas com acesso"); mantém o dono anterior como colaborador (edita, não compartilha) quando pedido |
+| Conflito `UNIQUE (owner_id, name)` tratado como 409 | Done | Checagem **antes** do UPDATE (`CountRoadmapsByOwnerAndName`): mensagem legível em vez do 23505 — que, além de mensagem ruim, aborta a transação em curso. Tratamento de 23505 mantido como rede contra corrida. O vínculo do dono anterior é criado antes do UPDATE e desfeito se ele falhar |
+| `RequireRoadmapSharer` aceita admin | Done | `auth.go`: dono OU `can_share` OU `role == "admin"`. `RequireRoadmapEditor` e `RequireRoadmapOwner` **inalterados** — o admin não ganha edição de conteúdo nem exclusão |
+| `canShare = true` para admin nos DTOs | Done | `listRoadmaps`, `getRoadmap` e `listSharedRoadmaps`: o botão "Compartilhar" aparece ao admin em qualquer roadmap |
+| Tela `/admin/roadmaps` | Done | `pages/AdminRoadmaps.tsx`: tabela (roadmap, dono + e-mail, iniciativas, colaboradores), filtro por texto, modal de transferência (select de pessoas sem o dono atual + caixa "manter como colaborador") e reúso do `ShareDialog` em "Gerenciar acesso" |
+| Navegação | Done | Botão "Administrar roadmaps" no cabeçalho da lista de roadmaps e da tela de Usuários (só para admin); rota `adminOnly` no `App.tsx` |
+| Testes backend | Done | `admin_roadmaps_test.go`: 8 casos — exige admin (403/401), listagem com e-mail e contagens, transferência derrubando o dono anterior, transferência mantendo-o como colaborador, remoção do vínculo do novo dono, validações (404/400 em tabela), conflito de nome 409 sem deixar rastro, e admin gerencia acesso **sem** poder renomear/excluir. `go test ./...` verde |
+| Testes frontend | Done | `AdminRoadmaps.test.tsx`: 8 casos (listagem, filtro por dono, transferência com e sem manter o anterior, dono atual ausente das opções, validação de campo obrigatório, erro 409 do servidor exibido, abertura do ShareDialog do roadmap certo). 58/58 Vitest verdes; `npm run build` (tsc -b + vite) limpo |
+| Verificação visual (Playwright) | Done | `e2e/screenshot-admin-roadmaps.mjs`; 4 screenshots revisadas: cabeçalho com o novo botão, painel, modal de transferência e diálogo de acesso aberto pelo admin |
+| Teste funcional ponta a ponta | Done | Contra o app rodando: transferência ida e volta no banco local (dono e colaboradores conferidos via psql), e 409 real ao mandar um roadmap homônimo para quem já tem um. Estado do banco local restaurado |
+| Aviso no PRD sobre remoção de conta | Done | Remover usuário apaga os roadmaps dele (`ON DELETE CASCADE`) — o PRD agora orienta transferir antes de remover, e o fluxo de offboarding foi documentado |

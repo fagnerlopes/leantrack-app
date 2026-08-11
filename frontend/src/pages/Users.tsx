@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 import type { AdminUser } from "../api";
 import { useAuth } from "../auth";
@@ -58,7 +59,12 @@ export default function Users() {
         back={{ to: "/", label: "Roadmaps" }}
         title="Usuários"
         subtitle={`${users.length} ${users.length === 1 ? "conta" : "contas"}`}
-        actions={<button onClick={() => setCreating(true)} style={btnAccent}>+ Novo usuário</button>}
+        actions={
+          <>
+            <Link to="/admin/roadmaps" style={btnLight}>Administrar roadmaps</Link>
+            <button onClick={() => setCreating(true)} style={btnAccent}>+ Novo usuário</button>
+          </>
+        }
       />
 
       <div style={{ padding: 24 }}>
@@ -231,6 +237,7 @@ const lbl: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 6
 const input: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontSize: 14, outline: "none", background: "#f8fafc", color: "#0f172a", boxSizing: "border-box" };
 const btnGhostDark: React.CSSProperties = { padding: "8px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 const btnAccent: React.CSSProperties = { padding: "7px 14px", borderRadius: 8, border: "none", background: "#3b82f6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" };
+const btnLight: React.CSSProperties = { padding: "6px 12px", borderRadius: 8, background: "#1e293b", color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none" };
 const btnSmallDanger: React.CSSProperties = { padding: "5px 10px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fff", color: "#dc2626", fontSize: 11, fontWeight: 600 };
 const btnSmall: React.CSSProperties = { padding: "5px 10px", borderRadius: 6, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 11, fontWeight: 600, cursor: "pointer" };
 const btnGenerate: React.CSSProperties = { padding: "6px 12px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", color: "#2563eb", fontSize: 12, fontWeight: 600, cursor: "pointer" };

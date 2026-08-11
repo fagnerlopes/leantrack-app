@@ -11,6 +11,84 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const adminListRoadmaps = `-- name: AdminListRoadmaps :many
+SELECT r.id, r.owner_id, r.name, r.slug, r.description, r.created_at, r.updated_at,
+       u.name AS owner_name, u.email AS owner_email,
+       (SELECT COUNT(*) FROM roadmap_items i WHERE i.roadmap_id = r.id) AS item_count,
+       (SELECT COUNT(*) FROM roadmap_collaborators c WHERE c.roadmap_id = r.id) AS collaborator_count
+FROM roadmaps r
+JOIN users u ON u.id = r.owner_id
+ORDER BY u.name ASC, r.name ASC
+`
+
+type AdminListRoadmapsRow struct {
+	ID                int64              `json:"id"`
+	OwnerID           int64              `json:"owner_id"`
+	Name              string             `json:"name"`
+	Slug              string             `json:"slug"`
+	Description       string             `json:"description"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	OwnerName         string             `json:"owner_name"`
+	OwnerEmail        string             `json:"owner_email"`
+	ItemCount         int64              `json:"item_count"`
+	CollaboratorCount int64              `json:"collaborator_count"`
+}
+
+// AdminListRoadmaps alimenta o painel do admin: todos os roadmaps com o dono
+// (nome e e-mail, para identificar contas de quem saiu) e as contagens de
+// iniciativas e colaboradores.
+func (q *Queries) AdminListRoadmaps(ctx context.Context) ([]AdminListRoadmapsRow, error) {
+	rows, err := q.db.Query(ctx, adminListRoadmaps)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AdminListRoadmapsRow
+	for rows.Next() {
+		var i AdminListRoadmapsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OwnerName,
+			&i.OwnerEmail,
+			&i.ItemCount,
+			&i.CollaboratorCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countRoadmapsByOwnerAndName = `-- name: CountRoadmapsByOwnerAndName :one
+SELECT COUNT(*) FROM roadmaps WHERE owner_id = $1 AND name = $2
+`
+
+type CountRoadmapsByOwnerAndNameParams struct {
+	OwnerID int64  `json:"owner_id"`
+	Name    string `json:"name"`
+}
+
+// CountRoadmapsByOwnerAndName antecipa a restrição UNIQUE (owner_id, name):
+// permite recusar a transferência com uma mensagem clara antes de tentar o
+// UPDATE (que abortaria a transação em curso).
+func (q *Queries) CountRoadmapsByOwnerAndName(ctx context.Context, arg CountRoadmapsByOwnerAndNameParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countRoadmapsByOwnerAndName, arg.OwnerID, arg.Name)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRoadmap = `-- name: CreateRoadmap :one
 INSERT INTO roadmaps (owner_id, name, slug, description)
 VALUES ($1, $2, $3, $4)
@@ -254,6 +332,35 @@ func (q *Queries) ListSharedRoadmaps(ctx context.Context, userID int64) ([]ListS
 		return nil, err
 	}
 	return items, nil
+}
+
+const transferRoadmapOwner = `-- name: TransferRoadmapOwner :one
+UPDATE roadmaps
+SET owner_id = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, owner_id, name, slug, description, created_at, updated_at
+`
+
+type TransferRoadmapOwnerParams struct {
+	ID      int64 `json:"id"`
+	OwnerID int64 `json:"owner_id"`
+}
+
+// TransferRoadmapOwner troca o dono do roadmap. Só o admin chama; a restrição
+// UNIQUE (owner_id, name) pode barrar se o novo dono já tiver roadmap homônimo.
+func (q *Queries) TransferRoadmapOwner(ctx context.Context, arg TransferRoadmapOwnerParams) (Roadmap, error) {
+	row := q.db.QueryRow(ctx, transferRoadmapOwner, arg.ID, arg.OwnerID)
+	var i Roadmap
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateRoadmap = `-- name: UpdateRoadmap :one

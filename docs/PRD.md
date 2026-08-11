@@ -16,7 +16,8 @@ A aplicação está evoluindo de **um único roadmap compartilhado** para **vár
 - **Todos os usuários logados veem** todos os roadmaps (modo leitura).
 - **Somente o dono** edita/apaga/reordena o próprio roadmap e seus itens.
 - **Compartilhamento com colaboradores:** o dono pode conceder a outras pessoas duas permissões **independentes** — **editar** (mexer no conteúdo: criar/alterar/reordenar/excluir iniciativas, **e renomear** o roadmap) e **compartilhar** (convidar/remover outros colaboradores e ajustar as permissões deles). É possível conceder só uma ou ambas. **Excluir o roadmap inteiro continua exclusivo do dono** — nenhum colaborador pode excluí-lo. Um colaborador com "compartilhar" pode convidar/remover colaboradores, **mas nunca o dono** (a propriedade só muda pelo dono; transferência de propriedade está fora de escopo).
-- **Admins** (3 e-mails fixos) gerenciam **contas**; quanto a roadmaps, são iguais a qualquer usuário (editam só os que criaram).
+- **Transferência de propriedade:** o dono não transfere o próprio roadmap; quem faz isso é o **admin** (ver ADR 016). Serve principalmente aos roadmaps **órfãos** — de gente que saiu da empresa.
+- **Admins** (3 e-mails fixos) gerenciam **contas** e, sobre roadmaps, têm exatamente dois poderes extras (ADR 016): **transferir a propriedade** de qualquer roadmap e **gerenciar o compartilhamento** de qualquer roadmap. Continuam **sem** poder editar o conteúdo nem excluir roadmaps alheios — para isso precisam se conceder acesso explicitamente ou assumir a propriedade. Quanto aos roadmaps que criaram, são donos como qualquer usuário.
 - Não é multitenant: todos pertencem à mesma empresa; o controle é de **propriedade**, não de isolamento entre organizações.
 
 ## Público-alvo
@@ -40,7 +41,7 @@ Tudo é protegido por autenticação; nada é público.
 - **Dono:** modo edição completo — criar/editar iniciativas, arrastar para reordenar, cores, datas, link do épico, além de **renomear** e **excluir** o roadmap (exclusão confirmada digitando o slug exato).
 - **Colaborador com permissão de editar:** abre o roadmap em **modo edição** (sem o selo "Somente leitura"), podendo mexer no conteúdo e renomear; **não vê o botão de excluir** (exclusão é só do dono).
 - **Não-dono sem permissão de editar:** modo **somente leitura**, com selo "🔒 Somente leitura — roadmap de {dono}" e sem controles de edição.
-- **Botão "Compartilhar":** visível ao **dono** e a quem tem permissão de compartilhar. Abre o **diálogo de colaboradores**: convidar por **e-mail** (de conta existente) definindo as permissões "Pode editar" e "Pode compartilhar"; **aviso** quando o e-mail não tem conta, orientando solicitar o cadastro a `marcus.januario@locaweb.com.br` (sem auto-cadastro); e a **lista de pessoas com acesso** (o dono aparece marcado como "Dono", sem opção de remover) com botão para **remover** colaboradores.
+- **Botão "Compartilhar":** visível ao **dono**, a quem tem permissão de compartilhar e ao **admin** (em qualquer roadmap — ADR 016). Abre o **diálogo de colaboradores**: convidar por **e-mail** (de conta existente) definindo as permissões "Pode editar" e "Pode compartilhar"; **aviso** quando o e-mail não tem conta, orientando solicitar o cadastro a `marcus.januario@locaweb.com.br` (sem auto-cadastro); e a **lista de pessoas com acesso** (o dono aparece marcado como "Dono", sem opção de remover) com botão para **remover** colaboradores.
   - **Autocomplete do convite:** ao digitar **4 ou mais caracteres** no campo de e-mail, o sistema sugere usuários cujo **e-mail ou nome** casam com o texto, exibindo nome + e-mail. Quem já tem acesso (o dono e colaboradores atuais) **não aparece** nas sugestões. Escolher uma sugestão preenche o campo automaticamente.
 - Gantt horizontal Mai/26 → Mai/27 com cabeçalho por trimestre (Q2/26 ... Q2/27).
 - Itens agrupados por status: Em andamento, Não iniciado, Concluído, Pausado.
@@ -59,6 +60,16 @@ Tudo é protegido por autenticação; nada é público.
 - Listar contas, criar usuário (nome, e-mail, senha temporária, papel), alterar papel (`user`/`admin`), **resetar senha** e remover.
 - **Resetar senha** (ver ADR 015): como não há "Esqueci minha senha" por e-mail, o admin redefine a senha de qualquer usuário **sem informar a senha antiga**. Há um **gerador de senha temporária forte** (copiar/gerar-outra) e um alerta para salvar a senha no **Keeper**. A senha definida pelo admin (no reset ou na criação) é **temporária**: o usuário é **obrigado a trocá-la no primeiro acesso**.
 - Proteções: não é possível remover a própria conta nem rebaixar/remover o último admin.
+- **Atenção ao remover contas:** remover um usuário **apaga junto os roadmaps dos quais ele é dono** (e as iniciativas deles). Antes de remover a conta de quem saiu, transfira os roadmaps dela no painel "Administrar roadmaps".
+
+### Painel de administração de roadmaps (`/admin/roadmaps`) — apenas role `admin`
+
+Existe para resolver os **roadmaps órfãos**: quando o dono deixa a empresa, ninguém consegue editar o roadmap nem conceder acesso a um substituto (ver ADR 016).
+
+- Lista **todos** os roadmaps da empresa com nome, descrição, **dono (nome + e-mail)**, nº de iniciativas e nº de colaboradores, com um campo de filtro por roadmap, dono ou e-mail.
+- **Transferir dono:** escolhe-se o novo dono numa lista de pessoas (o dono atual não aparece) e decide-se, por caixa de seleção, se o **dono anterior continua como colaborador com permissão de editar** — desmarcado por padrão, que é o caso de quem saiu da empresa e deve perder o acesso. Se o novo dono já tiver um roadmap com o mesmo nome, a transferência é recusada com uma mensagem pedindo que se renomeie um dos dois.
+- **Gerenciar acesso:** abre o mesmo diálogo de colaboradores das telas de roadmap, para convidar, ajustar permissões e remover pessoas.
+- O admin **não** ganha permissão de editar o conteúdo nem de excluir roadmaps alheios — se precisar editar, convida a si mesmo como colaborador ou assume a propriedade.
 
 ### Login (`/login`)
 - Email + senha.
@@ -83,6 +94,7 @@ Tudo é protegido por autenticação; nada é público.
 2. **PM/Tech Lead atualiza o próprio roadmap:** em "Meus roadmaps" abre o seu roadmap (modo edição) → clica numa iniciativa → ajusta progresso, datas, dependência externa → salva; ou cria uma nova iniciativa. Quem consultar o roadmap vê a atualização ao recarregar.
 3. **Novo setor começa a usar:** cria "+ Novo roadmap" (ex.: "Roadmap VPS 2026"), que abre em modo edição para cadastrar as iniciativas.
 4. **Admin gerencia acesso:** abre "Usuários", cria a conta do novo PM com papel `user`, gera uma senha temporária e a repassa pelo Keeper; no primeiro login o PM é obrigado a trocá-la. Se alguém esquece a senha, o admin usa "Resetar senha".
+5. **Alguém sai da empresa e deixa roadmaps órfãos:** o admin abre "Administrar roadmaps", filtra pelo e-mail de quem saiu, clica em "Transferir dono" em cada roadmap, escolhe quem assume e deixa desmarcada a opção de manter o antigo dono. Em seguida usa "Gerenciar acesso" para tirar a pessoa de roadmaps em que ela era apenas colaboradora. Só depois disso remove a conta em "Usuários" — remover antes apagaria os roadmaps.
 
 ## Requisitos não funcionais
 

@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import RoadmapList from "./pages/RoadmapList";
 import RoadmapView from "./pages/RoadmapView";
 import Users from "./pages/Users";
+import AdminRoadmaps from "./pages/AdminRoadmaps";
 import Profile from "./pages/Profile";
 import ForcePasswordChange from "./pages/ForcePasswordChange";
 
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/roadmaps/:idSlug" element={<Protected><RoadmapView /></Protected>} />
           <Route path="/perfil" element={<Protected><Profile /></Protected>} />
           <Route path="/admin/users" element={<Protected adminOnly><Users /></Protected>} />
+          <Route path="/admin/roadmaps" element={<Protected adminOnly><AdminRoadmaps /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

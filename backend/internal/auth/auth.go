@@ -297,10 +297,12 @@ func RequireRoadmapEditor(q *sqlc.Queries) func(http.Handler) http.Handler {
 	}, "apenas o dono ou um colaborador com permissão de edição pode alterar este roadmap")
 }
 
-// RequireRoadmapSharer libera a gestão de colaboradores: dono OU colaborador
-// com can_share.
+// RequireRoadmapSharer libera a gestão de colaboradores: dono, colaborador com
+// can_share OU admin. O admin entra aqui para destravar roadmaps cujo dono saiu
+// da empresa (ver ADR 016); note que isso não lhe dá poder de editar conteúdo
+// (RequireRoadmapEditor) nem de excluir o roadmap (RequireRoadmapOwner).
 func RequireRoadmapSharer(q *sqlc.Queries) func(http.Handler) http.Handler {
 	return roadmapAccess(q, func(u *SessionUser, ownerID int64, canEdit, canShare bool) bool {
-		return ownerID == u.ID || canShare
-	}, "apenas o dono ou um colaborador com permissão de compartilhar pode gerenciar o acesso")
+		return ownerID == u.ID || canShare || u.Role == "admin"
+	}, "apenas o dono, um colaborador com permissão de compartilhar ou um admin pode gerenciar o acesso")
 }

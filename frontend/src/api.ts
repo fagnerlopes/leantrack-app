@@ -38,6 +38,20 @@ export type AdminUser = {
   authProvider: string;
 };
 
+// AdminRoadmap é a visão do painel do admin: todos os roadmaps com o dono
+// (nome + e-mail, para identificar quem saiu da empresa) e as contagens.
+export type AdminRoadmap = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  ownerId: number;
+  ownerName: string;
+  ownerEmail: string;
+  itemCount: number;
+  collaboratorCount: number;
+};
+
 export type Item = {
   id: number;
   title: string;
@@ -138,4 +152,12 @@ export const api = {
   // trocá-la no próximo acesso.
   resetUserPassword: (id: number, password: string) =>
     req<AdminUser>(`/api/admin/users/${id}/password`, { method: "PUT", body: JSON.stringify({ password }) }),
+
+  // Admin — roadmaps (destravar roadmaps cujo dono saiu da empresa)
+  adminListRoadmaps: () => req<AdminRoadmap[]>("/api/admin/roadmaps"),
+  transferRoadmapOwner: (
+    id: number,
+    input: { newOwnerId: number; keepPreviousAsCollaborator: boolean },
+  ) =>
+    req<AdminRoadmap>(`/api/admin/roadmaps/${id}/owner`, { method: "PUT", body: JSON.stringify(input) }),
 };
