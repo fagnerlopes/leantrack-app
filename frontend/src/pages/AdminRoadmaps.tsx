@@ -58,8 +58,8 @@ export default function AdminRoadmaps() {
 
       <div style={{ padding: 24 }}>
         <div style={infoBox}>
-          Transfira a propriedade de roadmaps cujo dono saiu da empresa e ajuste quem
-          tem acesso. Excluir um roadmap continua sendo exclusividade do dono.
+          Transfira a propriedade de roadmaps conforme a necessidade e ajuste o
+          compartilhamento. Excluir um roadmap continua sendo exclusividade do dono.
         </div>
 
         <input
