@@ -6,15 +6,21 @@ servers:
 env:
   clear:
     APP_ENV: roadmap
-    BASE_URL: https://<%= ENV['INFRA_WEB_IP'] %>.nip.io
+    BASE_URL: https://roadmaplwsa.kinghost.net
     SEED_ADMIN_EMAIL: admin@kinghost.com.br
   secret:
     - DATABASE_URL
     - JWT_SECRET
     - SEED_ADMIN_PASSWORD
 
+# O domínio oficial é roadmaplwsa.kinghost.net. O endereço nip.io fica na lista
+# como rede de segurança: continua atendendo enquanto o DNS propaga e se o
+# domínio apresentar problema. Cada host recebe seu próprio certificado
+# Let's Encrypt (desafio HTTP-01), então ambos precisam resolver para esta VM.
 proxy:
-  host: <%= ENV['INFRA_WEB_IP'] %>.nip.io
+  hosts:
+    - roadmaplwsa.kinghost.net
+    - <%= ENV['INFRA_WEB_IP'] %>.nip.io
   ssl: true
 
 accessories:
