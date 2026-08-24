@@ -17,6 +17,22 @@
       .rm-gantt-card { height: 100%; display: flex; flex-direction: column; }
       .rm-gantt-scroll { flex: 1; min-height: 0; overflow: auto; }
 
+      /* Alças de ajuste de datas nas pontas da barra da iniciativa: aparecem
+         ao passar o mouse pela barra, ao focar pelo teclado ou durante o
+         arrasto. Ficam escondidas no resto do tempo para o quadro continuar
+         limpo — e nas exportações de PNG/PDF. Ver ADR 018. */
+      .rm-bar-handle { opacity: 0; transition: opacity 0.12s ease; }
+      .rm-bar-wrap:hover .rm-bar-handle,
+      .rm-bar-wrap[data-dragging="true"] .rm-bar-handle,
+      .rm-bar-handle:focus-visible { opacity: 1; }
+      .rm-bar-handle:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; border-radius: 3px; }
+
+      /* Em telas de toque não existe "passar o mouse": as alças ficam sempre
+         visíveis, senão não haveria como alcançá-las. */
+      @media (hover: none) {
+        .rm-bar-handle { opacity: 1; }
+      }
+
       /* Telas pequenas: com pouca altura — ou pouca largura, onde cabeçalho e
          filtros quebram em várias linhas e comem a altura útil — a lista
          viraria uma janelinha de 3 ou 4 linhas. Nesses casos a página volta a

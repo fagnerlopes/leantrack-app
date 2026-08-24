@@ -265,3 +265,30 @@ referência temporal. Pediram que só a lista de iniciativas se movesse.
 | Testes | Done | Novo `Gantt.test.tsx` (4 casos: um único scroller, régua `sticky` no topo com as duas faixas juntas, ganchos do export, z-index < 50) + caso de estrutura do shell em `RoadmapView.test.tsx`. 63/63 Vitest; `tsc -b` limpo; `go test -count=1 ./...` verde; lint sem erro novo |
 | Verificação visual (Playwright) | Done | `e2e/screenshot-regua-fixa.mjs` **mede** a posição da régua antes/depois de rolar 700px: 1280×720 e 1440×900 → régua 0px, lista 700px, rolagem interna; 375×812 e 1280×560 → contingência (página rola). `e2e/screenshot-export-completo.mjs`: PNG 2540×1493 (visível era 1230×470), quadro restaurado, régua ainda fixa depois. `e2e/screenshot-header-fixo.mjs`: header fixo na lista com a página rolando |
 | PRD atualizado | Done | Comportamento da régua fixa documentado; corrigidas duas referências obsoletas à janela fixa "Mai/26 → Mai/27" (o período é dinâmico desde o ADR 014) |
+
+## Sessão 24/08/2026 — Ajuste de datas arrastando a barra
+
+ADR: 018 (ajuste de datas arrastando a barra da iniciativa)
+
+Motivação: pedido dos usuários — mudar datas exigia abrir a iniciativa e digitar
+nos dois campos. Como início e fim mudam com frequência, replanejar um roadmap de
+20 iniciativas virava dezenas de cliques. Pediram o gesto do monday.com: puxar as
+alças do retângulo.
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Avaliação de biblioteca | Done | `dnd-kit`/`react-dnd` resolvem mover itens, não redimensionar pelas pontas; `interact.js`/`react-moveable` trabalham em pixels e brigariam com a captura de ponteiro do pan (ADR 017); Gantts prontos substituiriam o quadro inteiro. Decisão: Pointer Events nativos, reusando o padrão que o pan já usa. Zero dependência nova |
+| Aritmética de datas em `roadmap-utils` | Done | `addDays`, `daysBetween`, `durationInDays` — tudo em **UTC**, senão um dia de horário de verão (23h ou 25h) faria o arrasto errar por um dia |
+| Conversores inversos da timeline | Done | `fractionalToStartDate` / `fractionalToEndDate` no `Timeline`: posição fracionária → data. `Date.UTC` normaliza o estouro de dia (32 de julho vira 1º de agosto), então não há caso de borda |
+| Regras do arrasto como funções puras | Done | `computeDragDates` (mouse) e `shiftDatesByDays` (teclado): duração preservada no modo "mover", pontas que nunca se cruzam (mínimo 1 dia) e nada escapa do intervalo da timeline. Fora do componente — testáveis sem navegador |
+| Alças na barra | Done | `BarHandle` é `<button>` de verdade, com `aria-label` que nomeia a iniciativa. Envelope `rm-bar-wrap` posiciona no tempo e deixa as alças transbordarem 8px para continuarem pegáveis em barras estreitas; o visual foi para uma camada interna com `overflow: hidden` |
+| Arrastar o corpo da barra | Done | Desloca início e fim juntos preservando a duração exata em dias — o caso mais comum ("a iniciativa toda escorregou duas semanas") |
+| Robustez do gesto | Done | `setPointerCapture` (o arrasto sobrevive a sair da barra e da janela); limiar de 3px para distinguir clique de arrasto; clique pós-arrasto engolido no `onClickCapture`; origem fixa a cada quadro (o arredondamento para dia não se acumula); `Esc` desiste |
+| Convivência com os gestos existentes | Done | Alças e barra marcadas com `data-bar-drag`, que o pan da timeline já ignora; `stopPropagation` no `pointerdown`. Reordenação pelo título e clique-para-editar inalterados |
+| Rolagem automática nas bordas | Done | 56px de folga, 16px por quadro em `requestAnimationFrame`; o deslocamento da rolagem entra na conta da data, senão a barra escorregaria enquanto o quadro anda. É o que permite empurrar uma iniciativa para um trimestre fora da tela |
+| Ajuste pelo teclado | Done | `←`/`→` na alça focada ajustam 1 dia, `Shift` 7. A sequência acumula no rascunho e sai numa **única** gravação (500ms) |
+| Feedback visual | Done | Alças aparecem no hover por CSS (sem estado no React — e ficam fora das exportações PNG/PDF); durante o arrasto a barra ganha anel, a linha é tingida e um selo no topo do quadro mostra "início → fim · N dias". Em telas de toque as alças ficam sempre visíveis (`@media (hover: none)`) |
+| Salvamento otimista | Done | `handleDatesChange` no `RoadmapView`: a lista muda na hora e é desfeita se o `PUT` falhar, com aviso. O rascunho só é descartado quando a gravação termina — a barra não pisca de volta. Sem mudança no backend (reusa `PUT /items/{id}`) |
+| Testes | Done | 20 casos novos em `roadmap-utils.test.ts` (ida e volta posição↔data, ano bissexto, virada de ano, duração preservada, pontas que não se cruzam, limites da timeline) e 12 em `Gantt.test.tsx` (alças presentes/ausentes conforme permissão e datas, rótulos acessíveis, marcação anti-pan, ajuste por teclado, debounce, selo de leitura). 92/92 Vitest; `tsc -b` limpo; `go test ./...` verde; lint sem erro novo |
+| Verificação visual e funcional (Playwright) | Done | `e2e/screenshot-arrastar-datas.mjs` faz o arrasto **de verdade** com o mouse e confere o resultado no banco pela API: 14 verificações — alças escondidas/visíveis, cada alça mexendo só na sua ponta, corpo preservando a duração, clique ainda abrindo a edição, arrasto **não** abrindo, seta do teclado, rolagem automática na borda e restauração das datas originais (o script é repetível). 7 screenshots revisadas |
+| PRD atualizado | Done | Gesto documentado na visualização do roadmap e na edição de iniciativas |

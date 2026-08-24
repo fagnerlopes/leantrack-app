@@ -37,9 +37,46 @@ export type Timeline = {
   todayLabel: string;
   dateToFractional: (dateStr: string | null) => number | null;
   endDateToFractional: (dateStr: string | null) => number | null;
+  // Conversores inversos — usados pelo arrasto das alças, que traduz pixels
+  // percorridos pelo mouse em posição fracionária e daí de volta para uma data.
+  fractionalToStartDate: (frac: number) => string;
+  fractionalToEndDate: (frac: number) => string;
 };
 
 type DatedItem = Pick<Item, "startDate" | "endDate" | "extMilestone">;
+
+// --- Aritmética de datas em dias -------------------------------------------
+// Toda a conta é feita em UTC: usar horário local faria um dia "encolher" ou
+// "esticar" em fusos com horário de verão, e o arrasto erraria por um dia.
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function utcMillis(dateStr: string): number {
+  const { y, m, d } = parseYM(dateStr);
+  return Date.UTC(y, m - 1, d);
+}
+
+function isoFromUTC(millis: number): string {
+  const dt = new Date(millis);
+  return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+}
+
+// Soma (ou subtrai) dias a uma data ISO, atravessando meses e anos.
+export function addDays(dateStr: string, days: number): string {
+  return isoFromUTC(utcMillis(dateStr) + days * 86400000);
+}
+
+// Dias entre duas datas ISO (b - a). Mesma data = 0.
+export function daysBetween(a: string, b: string): number {
+  return Math.round((utcMillis(b) - utcMillis(a)) / 86400000);
+}
+
+// Duração inclusiva de uma iniciativa: de 1º a 1º de julho = 1 dia.
+export function durationInDays(startDate: string, endDate: string): number {
+  return daysBetween(startDate, endDate) + 1;
+}
 
 // Posição fracionária de uma data (em "meses") relativa ao início da timeline.
 // 0 = 1º dia da coluna 0; 1 = 1º dia da coluna seguinte; etc.
@@ -119,6 +156,27 @@ export function buildTimeline(items: DatedItem[]): Timeline {
     return absMonth(y, m) - baseAbsMonth + d / daysInMonth;
   };
 
+  // Inverso de dateToFractional: a parte inteira aponta a coluna do mês e a
+  // fracionária, o dia dentro dele. Date.UTC normaliza sozinho o estouro de
+  // dia (ex.: 32 de julho vira 1º de agosto), então não há caso de borda.
+  const fractionalToStartDate = (frac: number): string => {
+    const monthIdx = Math.floor(frac);
+    const rest = frac - monthIdx;
+    const { year, month } = fromAbsMonth(baseAbsMonth + monthIdx);
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return isoFromUTC(Date.UTC(year, month - 1, 1 + Math.round(rest * daysInMonth)));
+  };
+
+  // Inverso de endDateToFractional (que mede o FIM do dia). Dia 0 é normalizado
+  // para o último dia do mês anterior.
+  const fractionalToEndDate = (frac: number): string => {
+    const monthIdx = Math.floor(frac);
+    const rest = frac - monthIdx;
+    const { year, month } = fromAbsMonth(baseAbsMonth + monthIdx);
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return isoFromUTC(Date.UTC(year, month - 1, Math.round(rest * daysInMonth)));
+  };
+
   return {
     baseAbsMonth,
     totalMonths,
@@ -129,6 +187,8 @@ export function buildTimeline(items: DatedItem[]): Timeline {
     todayLabel: labelForDate(now),
     dateToFractional,
     endDateToFractional,
+    fractionalToStartDate,
+    fractionalToEndDate,
   };
 }
 
@@ -188,4 +248,74 @@ export function applyReorder<T extends { id: number; sortOrder: number }>(
     .map(i => (map.has(i.id) ? { ...i, sortOrder: map.get(i.id)! } : i))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
   return { items: next, entries };
+}
+
+// --- Arrasto das alças da barra (ajuste de datas) ---------------------------
+// Toda a decisão de "que datas essas coordenadas representam" mora aqui, em
+// funções puras: o componente cuida só de mouse/toque e de desenhar. Ver ADR 018.
+
+export type BarDragMode =
+  | "move"   // arrastar o corpo da barra: desloca início e fim juntos
+  | "start"  // alça esquerda: muda só a data de início
+  | "end";   // alça direita: muda só a data de fim
+
+export type DateRange = { startDate: string; endDate: string };
+
+// Converte um deslocamento horizontal (já em "meses fracionários") nas novas
+// datas da iniciativa. `base` são as datas de onde o arrasto partiu — nunca as
+// datas do quadro a cada frame, para o arrasto não acumular erro.
+//
+// Regras: o arrasto do corpo preserva a duração exata em dias; as alças nunca
+// cruzam uma a outra (duração mínima de 1 dia); e nada escapa do intervalo da
+// timeline desenhada.
+export function computeDragDates(
+  mode: BarDragMode,
+  base: DateRange,
+  deltaMonths: number,
+  timeline: Timeline,
+): DateRange {
+  const clamp = (frac: number) => Math.min(Math.max(frac, 0), timeline.totalMonths);
+
+  if (mode === "move") {
+    const span = daysBetween(base.startDate, base.endDate);
+    const startFrac = timeline.dateToFractional(base.startDate)!;
+    const startDate = timeline.fractionalToStartDate(clamp(startFrac + deltaMonths));
+    return { startDate, endDate: addDays(startDate, span) };
+  }
+
+  if (mode === "start") {
+    const startFrac = timeline.dateToFractional(base.startDate)!;
+    const startDate = timeline.fractionalToStartDate(clamp(startFrac + deltaMonths));
+    return {
+      startDate: daysBetween(startDate, base.endDate) < 0 ? base.endDate : startDate,
+      endDate: base.endDate,
+    };
+  }
+
+  const endFrac = timeline.endDateToFractional(base.endDate)!;
+  const endDate = timeline.fractionalToEndDate(clamp(endFrac + deltaMonths));
+  return {
+    startDate: base.startDate,
+    endDate: daysBetween(base.startDate, endDate) < 0 ? base.startDate : endDate,
+  };
+}
+
+// Versão em dias inteiros do mesmo ajuste, usada pelo teclado (← → sobre a
+// alça focada). Mesmas regras de não-cruzamento.
+export function shiftDatesByDays(mode: BarDragMode, base: DateRange, days: number): DateRange {
+  if (mode === "move") {
+    return { startDate: addDays(base.startDate, days), endDate: addDays(base.endDate, days) };
+  }
+  if (mode === "start") {
+    const startDate = addDays(base.startDate, days);
+    return {
+      startDate: daysBetween(startDate, base.endDate) < 0 ? base.endDate : startDate,
+      endDate: base.endDate,
+    };
+  }
+  const endDate = addDays(base.endDate, days);
+  return {
+    startDate: base.startDate,
+    endDate: daysBetween(base.startDate, endDate) < 0 ? base.startDate : endDate,
+  };
 }

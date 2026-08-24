@@ -49,6 +49,14 @@ Tudo é protegido por autenticação; nada é público.
   (trimestres e meses), o cabeçalho do app, os filtros, o marcador "Hoje" e a legenda ficam
   sempre visíveis. Em telas pequenas (altura ≤ 600px ou largura ≤ 700px) a página volta a rolar
   por inteiro, para a lista não virar uma janelinha de poucas linhas.
+- **Ajuste de datas arrastando a barra (ADR 018):** quem pode editar muda as datas direto no
+  gráfico — puxar a **ponta esquerda** muda o início, a **direita** muda o fim, e arrastar o
+  **corpo da barra** desloca a iniciativa no tempo mantendo a duração. As alças aparecem ao
+  passar o mouse pela barra. Durante o gesto, um selo mostra "início → fim · N dias" e a
+  timeline rola sozinha ao chegar perto das bordas, para alcançar um trimestre fora da tela.
+  `Esc` desiste do ajuste; clicar sem arrastar continua abrindo a iniciativa para edição.
+  Pelo teclado, com a alça focada, `←`/`→` ajustam um dia e `Shift` sete. Só há alças em
+  iniciativas que já têm as duas datas cadastradas.
 - Itens agrupados por status: Em andamento, Não iniciado, Concluído, Pausado.
 - Barras com cores por status; barra tracejada vermelha/amarela para itens em risco.
 - Indicador "Hoje": linha vermelha e badge posicionados pela **data atual** (calculada em tempo de execução), enquanto a data cair dentro do período da timeline.
@@ -60,6 +68,7 @@ Tudo é protegido por autenticação; nada é público.
 ### Edição de iniciativas (dentro do roadmap, para o dono)
 - Modal de criação/edição com todos os campos da iniciativa, incluindo dependência interna (outra iniciativa) e bloco de dependência externa (time, descrição, marco), cor do card e link do épico.
 - Reordenação por arrastar dentro do mesmo status; remoção com confirmação.
+- Datas também podem ser ajustadas sem abrir o modal, arrastando a barra no gráfico (ADR 018).
 
 ### Painel de usuários (`/admin/users`) — apenas role `admin`
 - Listar contas, criar usuário (nome, e-mail, senha temporária, papel), alterar papel (`user`/`admin`), **resetar senha** e remover.

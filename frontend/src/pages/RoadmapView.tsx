@@ -10,7 +10,7 @@ import RoadmapLegend from "../components/RoadmapLegend";
 import ItemModal from "../ItemModal";
 import ActionMenu, { type ActionItem } from "../components/ActionMenu";
 import Toast from "../components/Toast";
-import { buildTimeline, calcRisk, applyReorder } from "../roadmap-utils";
+import { buildTimeline, calcRisk, applyReorder, fmtDate } from "../roadmap-utils";
 import { parseRoadmapId } from "../roadmap-path";
 
 const emptyForm: ItemInput = {
@@ -98,6 +98,24 @@ export default function RoadmapView() {
     } catch (e: any) {
       alert(`Erro ao reordenar: ${e.message}`);
       reloadItems();
+    }
+  }
+
+  // Ajuste de datas pelas alças da barra (ADR 018). A lista é atualizada na
+  // hora — o arrasto precisa parecer instantâneo — e desfeita se a gravação
+  // falhar, para a tela nunca mostrar uma data que o banco não tem.
+  async function handleDatesChange(item: Item, startDate: string, endDate: string) {
+    if (roadmapId == null) return;
+    const snapshot = items;
+    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, startDate, endDate } : i)));
+    try {
+      const { id: _id, ...rest } = { ...item, startDate, endDate };
+      const updated = await api.updateItem(roadmapId, item.id, rest);
+      setItems(prev => prev.map(i => (i.id === item.id ? updated : i)));
+      showToast(`${fmtDate(startDate)} → ${fmtDate(endDate)}`);
+    } catch (e: any) {
+      setItems(snapshot);
+      showToast(`Não foi possível salvar as datas: ${e.message}`);
     }
   }
 
@@ -269,13 +287,14 @@ export default function RoadmapView() {
             innerRef={ganttRef}
             onSelect={canEdit ? (it) => setEditing(it) : undefined}
             onReorder={canEdit ? handleReorder : undefined}
+            onDatesChange={canEdit ? handleDatesChange : undefined}
           />
         )}
       </div>
 
       {items.length > 0 && (
         <div style={{ padding: "0 24px 10px", fontSize: 11, color: "#94a3b8", flexShrink: 0 }}>
-          Dica: arraste a timeline para navegar no tempo{canEdit ? " · arraste o título da iniciativa para reordenar dentro do mesmo status · clique para editar" : ""}.
+          Dica: arraste a timeline para navegar no tempo{canEdit ? " · arraste as pontas da barra para mudar as datas (ou a barra inteira para deslocá-la) · arraste o título da iniciativa para reordenar dentro do mesmo status · clique para editar" : ""}.
         </div>
       )}
 
