@@ -8,6 +8,26 @@
       html, body, #root { margin: 0; padding: 0; min-height: 100vh; }
       body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #0f172a; }
       *, *::before, *::after { box-sizing: border-box; }
+
+      /* Layout "app shell" da tela de roadmap: a página não rola — apenas a
+         lista de iniciativas rola dentro do quadro, mantendo a régua de datas,
+         o header, os filtros e a legenda sempre visíveis. Ver ADR 017. */
+      .rm-shell { height: 100dvh; overflow: hidden; }
+      .rm-main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+      .rm-gantt-card { height: 100%; display: flex; flex-direction: column; }
+      .rm-gantt-scroll { flex: 1; min-height: 0; overflow: auto; }
+
+      /* Telas pequenas: com pouca altura — ou pouca largura, onde cabeçalho e
+         filtros quebram em várias linhas e comem a altura útil — a lista
+         viraria uma janelinha de 3 ou 4 linhas. Nesses casos a página volta a
+         rolar por inteiro (comportamento anterior) e a régua deixa de ser fixa.
+         O piso é ~320px de área para a lista. */
+      @media (max-height: 600px), (max-width: 700px) {
+        .rm-shell { height: auto; min-height: 100vh; overflow: visible; }
+        .rm-main { flex: 0 0 auto; min-height: auto; }
+        .rm-gantt-card { height: auto; }
+        .rm-gantt-scroll { flex: 0 0 auto; min-height: auto; overflow-y: visible; }
+      }
     </style>
   </head>
   <body>

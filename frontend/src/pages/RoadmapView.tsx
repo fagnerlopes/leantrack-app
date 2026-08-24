@@ -133,10 +133,52 @@ export default function RoadmapView() {
   if (canShare) actionItems.push({ label: "Compartilhar", Icon: Share2, onClick: () => setSharing(true) });
   if (canDelete) actionItems.push({ label: "Excluir roadmap", Icon: Trash2, onClick: () => setDeleting(true), danger: true });
 
-  async function exportPNG() {
-    if (!ganttRef.current) return;
+  // O quadro do roadmap é uma janela com rolagem própria (ver ADR 017): tirar a
+  // foto do nó como ele está na tela cortaria a lista na vertical e a timeline
+  // na horizontal. Antes de capturar, soltamos as amarras de altura/largura e
+  // devolvemos tudo ao estado anterior em seguida — inclusive a rolagem.
+  async function captureGantt(): Promise<string | null> {
+    const card = ganttRef.current;
+    if (!card) return null;
     const { toPng } = await import("html-to-image");
-    const dataUrl = await toPng(ganttRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
+    const opts = { backgroundColor: "#ffffff", pixelRatio: 2 };
+    const scroll = card.querySelector<HTMLElement>("[data-gantt-scroll]");
+    const content = card.querySelector<HTMLElement>("[data-gantt-content]");
+    if (!scroll || !content) return toPng(card, opts);
+
+    const saved = {
+      cardHeight: card.style.height,
+      cardWidth: card.style.width,
+      cardFlex: card.style.flex,
+      overflow: scroll.style.overflow,
+      flex: scroll.style.flex,
+      scrollLeft: scroll.scrollLeft,
+      scrollTop: scroll.scrollTop,
+    };
+    // `flex: none` nos dois é essencial: como itens de um contêiner flex de
+    // altura definida, card e área de rolagem seriam comprimidos de volta ao
+    // tamanho da janela visível — e a foto sairia cortada na vertical.
+    card.style.height = "auto";
+    card.style.width = `${content.scrollWidth}px`;
+    card.style.flex = "none";
+    scroll.style.overflow = "visible";
+    scroll.style.flex = "none";
+    try {
+      return await toPng(card, opts);
+    } finally {
+      card.style.height = saved.cardHeight;
+      card.style.width = saved.cardWidth;
+      card.style.flex = saved.cardFlex;
+      scroll.style.overflow = saved.overflow;
+      scroll.style.flex = saved.flex;
+      scroll.scrollLeft = saved.scrollLeft;
+      scroll.scrollTop = saved.scrollTop;
+    }
+  }
+
+  async function exportPNG() {
+    const dataUrl = await captureGantt();
+    if (!dataUrl) return;
     const link = document.createElement("a");
     link.href = dataUrl;
     link.download = `${slugForFile}-${new Date().toISOString().slice(0, 10)}.png`;
@@ -144,10 +186,9 @@ export default function RoadmapView() {
   }
 
   async function exportPDF() {
-    if (!ganttRef.current) return;
-    const { toPng } = await import("html-to-image");
+    const dataUrl = await captureGantt();
+    if (!dataUrl) return;
     const { jsPDF } = await import("jspdf");
-    const dataUrl = await toPng(ganttRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
     const img = new Image();
     img.src = dataUrl;
     await new Promise(res => (img.onload = res));
@@ -179,7 +220,7 @@ export default function RoadmapView() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div className="rm-shell" style={{ display: "flex", flexDirection: "column" }}>
       <AppHeader
         back={{ to: "/", label: "Roadmaps" }}
         title={roadmap?.name}
@@ -197,7 +238,7 @@ export default function RoadmapView() {
         }
       />
 
-      <div style={{ padding: "16px 24px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
+      <div style={{ padding: "16px 24px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0, position: "relative", zIndex: 60 }}>
         <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={[
           { v: "all", l: "Todos" }, { v: "em-andamento", l: "Em andamento" }, { v: "nao-iniciado", l: "Não iniciado" },
           { v: "concluido", l: "Concluído" }, { v: "pausado", l: "Pausado" },
@@ -216,7 +257,7 @@ export default function RoadmapView() {
         </div>
       </div>
 
-      <div style={{ padding: 24, flex: 1 }}>
+      <div className="rm-main" style={{ padding: 24 }}>
         {items.length === 0 ? (
           <div style={{ color: "#94a3b8", padding: "40px 0", textAlign: "center" }}>
             {canEdit ? 'Nenhuma iniciativa ainda. Clique em "+ Nova iniciativa".' : "Este roadmap ainda não tem iniciativas."}
@@ -230,12 +271,13 @@ export default function RoadmapView() {
             onReorder={canEdit ? handleReorder : undefined}
           />
         )}
-        {items.length > 0 && (
-          <div style={{ marginTop: 10, fontSize: 11, color: "#94a3b8" }}>
-            Dica: arraste a timeline para navegar no tempo{canEdit ? " · arraste o título da iniciativa para reordenar dentro do mesmo status · clique para editar" : ""}.
-          </div>
-        )}
       </div>
+
+      {items.length > 0 && (
+        <div style={{ padding: "0 24px 10px", fontSize: 11, color: "#94a3b8", flexShrink: 0 }}>
+          Dica: arraste a timeline para navegar no tempo{canEdit ? " · arraste o título da iniciativa para reordenar dentro do mesmo status · clique para editar" : ""}.
+        </div>
+      )}
 
       <RoadmapLegend />
 

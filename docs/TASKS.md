@@ -243,3 +243,25 @@ Motivação: colaboradores saíram da empresa e os roadmaps de que eram donos fi
 | Verificação visual (Playwright) | Done | `e2e/screenshot-admin-roadmaps.mjs`; 4 screenshots revisadas: cabeçalho com o novo botão, painel, modal de transferência e diálogo de acesso aberto pelo admin |
 | Teste funcional ponta a ponta | Done | Contra o app rodando: transferência ida e volta no banco local (dono e colaboradores conferidos via psql), e 409 real ao mandar um roadmap homônimo para quem já tem um. Estado do banco local restaurado |
 | Aviso no PRD sobre remoção de conta | Done | Remover usuário apaga os roadmaps dele (`ON DELETE CASCADE`) — o PRD agora orienta transferir antes de remover, e o fluxo de offboarding foi documentado |
+
+## Sessão 24/08/2026 — Régua de datas fixa ao rolar
+
+ADR: 017 (régua de datas fixa: a tela do roadmap vira um "app shell")
+
+Motivação: pedido dos usuários — em roadmaps longos, rolar até o meio da lista
+fazia o cabeçalho de trimestres/meses sair de vista e as barras perdiam
+referência temporal. Pediram que só a lista de iniciativas se movesse.
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Análise de viabilidade | Done | Três bloqueios mapeados: `overflow: hidden` do card, `overflowX: auto` (que torna o eixo Y `auto` por regra do CSS) e a rolagem estar na **página**, não no quadro. Conclusão: não dá para resolver com `sticky` solto — é troca do modelo de rolagem |
+| `RoadmapView` como app shell | Done | Raiz `.rm-shell` (`100dvh` + `overflow: hidden`); cabeçalho, filtros, dica e legenda como faixas fixas; área do Gantt em `.rm-main` (`flex: 1; min-height: 0`). A dica saiu de dentro da área que rola para o rodapé |
+| Quadro do Gantt como único scroller | Done | `.rm-gantt-card` (coluna flex, altura cheia) + `.rm-gantt-scroll` (`overflow: auto`), marcados com `data-gantt-scroll` / `data-gantt-content` |
+| Régua fixa no topo | Done | Trimestres e meses num wrapper `sticky; top: 0; z-index: 30` — juntos, para não medir a altura de uma faixa para posicionar a outra. z-index abaixo do menu de ações (50) |
+| Selo "Hoje" fixo na base | Done | Rodapé do quadro virou `sticky; bottom: 0` |
+| `AppHeader` fixo | Done | `position: sticky; top: 0; z-index: 80` — vale para lista de roadmaps e usuários, que continuam rolando a página |
+| Contingência em telas pequenas | Done | Media query `(max-height: 600px), (max-width: 700px)` desfaz o shell: a página volta a rolar por inteiro. Piso de ~320px de área útil para a lista |
+| Exportação PNG/PDF sem corte | Done | `captureGantt` solta altura/largura/`flex` do card **e** da área de rolagem antes de fotografar e restaura tudo depois (inclusive `scrollLeft`/`scrollTop`). O `flex: none` era o que faltava: sem ele o flex comprimia o card de volta ao tamanho visível e a foto saía cortada na vertical |
+| Testes | Done | Novo `Gantt.test.tsx` (4 casos: um único scroller, régua `sticky` no topo com as duas faixas juntas, ganchos do export, z-index < 50) + caso de estrutura do shell em `RoadmapView.test.tsx`. 63/63 Vitest; `tsc -b` limpo; `go test -count=1 ./...` verde; lint sem erro novo |
+| Verificação visual (Playwright) | Done | `e2e/screenshot-regua-fixa.mjs` **mede** a posição da régua antes/depois de rolar 700px: 1280×720 e 1440×900 → régua 0px, lista 700px, rolagem interna; 375×812 e 1280×560 → contingência (página rola). `e2e/screenshot-export-completo.mjs`: PNG 2540×1493 (visível era 1230×470), quadro restaurado, régua ainda fixa depois. `e2e/screenshot-header-fixo.mjs`: header fixo na lista com a página rolando |
+| PRD atualizado | Done | Comportamento da régua fixa documentado; corrigidas duas referências obsoletas à janela fixa "Mai/26 → Mai/27" (o período é dinâmico desde o ADR 014) |

@@ -43,10 +43,15 @@ Tudo é protegido por autenticação; nada é público.
 - **Não-dono sem permissão de editar:** modo **somente leitura**, com selo "🔒 Somente leitura — roadmap de {dono}" e sem controles de edição.
 - **Botão "Compartilhar":** visível ao **dono**, a quem tem permissão de compartilhar e ao **admin** (em qualquer roadmap — ADR 016). Abre o **diálogo de colaboradores**: convidar por **e-mail** (de conta existente) definindo as permissões "Pode editar" e "Pode compartilhar"; **aviso** quando o e-mail não tem conta, orientando solicitar o cadastro a `marcus.januario@locaweb.com.br` (sem auto-cadastro); e a **lista de pessoas com acesso** (o dono aparece marcado como "Dono", sem opção de remover) com botão para **remover** colaboradores.
   - **Autocomplete do convite:** ao digitar **4 ou mais caracteres** no campo de e-mail, o sistema sugere usuários cujo **e-mail ou nome** casam com o texto, exibindo nome + e-mail. Quem já tem acesso (o dono e colaboradores atuais) **não aparece** nas sugestões. Escolher uma sugestão preenche o campo automaticamente.
-- Gantt horizontal Mai/26 → Mai/27 com cabeçalho por trimestre (Q2/26 ... Q2/27).
+- Gantt horizontal com cabeçalho por trimestre e por mês; o período é derivado das datas
+  cadastradas (ADR 014), não é uma janela fixa.
+- **Régua de datas fixa (ADR 017):** ao rolar, apenas a lista de iniciativas se move — a régua
+  (trimestres e meses), o cabeçalho do app, os filtros, o marcador "Hoje" e a legenda ficam
+  sempre visíveis. Em telas pequenas (altura ≤ 600px ou largura ≤ 700px) a página volta a rolar
+  por inteiro, para a lista não virar uma janelinha de poucas linhas.
 - Itens agrupados por status: Em andamento, Não iniciado, Concluído, Pausado.
 - Barras com cores por status; barra tracejada vermelha/amarela para itens em risco.
-- Indicador "Hoje": linha vermelha e badge posicionados pela **data atual** (calculada em tempo de execução), enquanto a data cair dentro da janela Mai/26 → Mai/27.
+- Indicador "Hoje": linha vermelha e badge posicionados pela **data atual** (calculada em tempo de execução), enquanto a data cair dentro do período da timeline.
 - Marcos externos como losangos coloridos no track temporal.
 - Cálculo automático de risco: **Crítico** (marco depois do início → bloqueio), **Alerta** (marco até 14 dias antes do início), **No prazo** (marco com folga).
 - Filtros: por status, por trimestre, apenas em risco.

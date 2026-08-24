@@ -84,4 +84,15 @@ describe("RoadmapView", () => {
     await userEvent.click(confirmBtn);
     await waitFor(() => expect(deleteRoadmap).toHaveBeenCalledWith(5, base.slug));
   });
+
+  // ADR 017: a tela é um "app shell" — header, filtros e legenda são faixas
+  // fixas e só a lista de iniciativas rola. O comportamento visual é verificado
+  // por screenshot; aqui travamos a estrutura que o CSS depende.
+  it("monta a tela como app shell, com a área do roadmap ocupando a altura restante", async () => {
+    getRoadmap.mockResolvedValue({ ...base, ...ownerPerms });
+    const { container } = renderView();
+    await waitFor(() => expect(screen.getByRole("button", { name: "+ Nova iniciativa" })).toBeInTheDocument());
+    expect(container.querySelector(".rm-shell")).not.toBeNull();
+    expect(container.querySelector(".rm-main")).not.toBeNull();
+  });
 });

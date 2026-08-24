@@ -52,9 +52,13 @@ function BackButton({ to, label }: { to: string; label: string }) {
   );
 }
 
+// `sticky` mantém o cabeçalho visível nas telas que rolam (lista de roadmaps,
+// usuários). Na tela do roadmap a página não rola — ver ADR 017 — então ali o
+// efeito é inofensivo. z-index abaixo dos modais (1000) e acima do conteúdo.
 const headerStyle: React.CSSProperties = {
   background: "#0f172a", color: "#fff", padding: "16px 24px",
   display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+  position: "sticky", top: 0, zIndex: 80, flexShrink: 0,
 };
 const titleStyle: React.CSSProperties = {
   fontSize: 18, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",

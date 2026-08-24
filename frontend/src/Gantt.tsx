@@ -221,9 +221,18 @@ export default function Gantt({ items, timeline, onSelect, onReorder, innerRef }
   const innerMinWidth = LABEL_W + totalMonths * COL_MIN_PX;
 
   return (
-    <div ref={innerRef} style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+    <div
+      ref={innerRef}
+      className="rm-gantt-card"
+      style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0" }}
+    >
+      {/* Único elemento que rola na tela do roadmap: a lista de iniciativas se
+          move aqui dentro enquanto a régua de datas fica presa no topo
+          (`position: sticky`). A altura vem do flex do shell — ver ADR 017. */}
       <div
         ref={scrollRef}
+        className="rm-gantt-scroll"
+        data-gantt-scroll
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endPan}
@@ -236,35 +245,39 @@ export default function Gantt({ items, timeline, onSelect, onReorder, innerRef }
           userSelect: grabbing ? "none" : "auto",
         }}
       >
-        <div style={{ minWidth: innerMinWidth }}>
-          {/* Quarter header */}
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#fff" }}>
-            <div style={{ width: LABEL_W, minWidth: LABEL_W, padding: "10px 16px", borderRight: "1px solid #e2e8f0", position: "sticky", left: 0, zIndex: 20, background: "#fff" }}>
-              <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Iniciativa</span>
+        <div data-gantt-content style={{ minWidth: innerMinWidth }}>
+          {/* Régua de datas — trimestres e meses num wrapper sticky único,
+              para não depender da altura medida de cada faixa. */}
+          <div style={{ position: "sticky", top: 0, zIndex: 30 }}>
+            {/* Quarter header */}
+            <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#fff" }}>
+              <div style={{ width: LABEL_W, minWidth: LABEL_W, padding: "10px 16px", borderRight: "1px solid #e2e8f0", position: "sticky", left: 0, zIndex: 20, background: "#fff" }}>
+                <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Iniciativa</span>
+              </div>
+              <div style={{ flex: 1, display: "flex" }}>
+                {quarters.map((q, qi) => (
+                  <div key={q.label} style={{
+                    width: `${q.span * COL_PCT}%`, padding: "10px 0",
+                    textAlign: "center", fontSize: 11, fontWeight: 700, color: "#0f172a",
+                    borderRight: "1px solid #e2e8f0",
+                    background: qi % 2 === 1 ? "#f1f5f9" : "#fff",
+                  }}>{q.label}</div>
+                ))}
+              </div>
             </div>
-            <div style={{ flex: 1, display: "flex" }}>
-              {quarters.map((q, qi) => (
-                <div key={q.label} style={{
-                  width: `${q.span * COL_PCT}%`, padding: "10px 0",
-                  textAlign: "center", fontSize: 11, fontWeight: 700, color: "#0f172a",
-                  borderRight: "1px solid #e2e8f0",
-                  background: qi % 2 === 1 ? "#f1f5f9" : "#fff",
-                }}>{q.label}</div>
-              ))}
-            </div>
-          </div>
 
-          {/* Month header */}
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
-            <div style={{ width: LABEL_W, minWidth: LABEL_W, borderRight: "1px solid #e2e8f0", position: "sticky", left: 0, zIndex: 20, background: "#f8fafc" }}/>
-            <div style={{ flex: 1, display: "flex" }}>
-              {months.map((m, i) => (
-                <div key={i} style={{
-                  width: `${COL_PCT}%`, padding: "6px 0",
-                  textAlign: "center", fontSize: 10, color: "#94a3b8",
-                  borderRight: "1px solid #e2e8f0",
-                }}>{m}</div>
-              ))}
+            {/* Month header */}
+            <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+              <div style={{ width: LABEL_W, minWidth: LABEL_W, borderRight: "1px solid #e2e8f0", position: "sticky", left: 0, zIndex: 20, background: "#f8fafc" }}/>
+              <div style={{ flex: 1, display: "flex" }}>
+                {months.map((m, i) => (
+                  <div key={i} style={{
+                    width: `${COL_PCT}%`, padding: "6px 0",
+                    textAlign: "center", fontSize: 10, color: "#94a3b8",
+                    borderRight: "1px solid #e2e8f0",
+                  }}>{m}</div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -406,7 +419,10 @@ export default function Gantt({ items, timeline, onSelect, onReorder, innerRef }
 
           {/* Today footer — altura própria para o badge não ser cortado pelo
               overflow:hidden do card */}
-          <div style={{ display: "flex", borderTop: "1px solid #e2e8f0", background: "#fff", padding: "8px 0 16px" }}>
+          <div style={{
+            display: "flex", borderTop: "1px solid #e2e8f0", background: "#fff",
+            padding: "8px 0 16px", position: "sticky", bottom: 0, zIndex: 30,
+          }}>
             <div style={{ width: LABEL_W, minWidth: LABEL_W, borderRight: "1px solid #e2e8f0", position: "sticky", left: 0, zIndex: 20, background: "#fff" }}/>
             <div style={{ flex: 1, position: "relative", height: 22 }}>
               {todayInRange && (
