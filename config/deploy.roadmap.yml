@@ -12,6 +12,8 @@ env:
     - DATABASE_URL
     - JWT_SECRET
     - SEED_ADMIN_PASSWORD
+    - TURNSTILE_SITE_KEY
+    - TURNSTILE_SECRET_KEY
 
 # O domínio oficial é roadmaplwsa.kinghost.net. O endereço nip.io fica na lista
 # como rede de segurança: continua atendendo enquanto o DNS propaga e se o
