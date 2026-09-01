@@ -1,5 +1,7 @@
 export type User = { id: number; email: string; name: string; role: string; mustChangePassword: boolean };
 
+export type PublicConfig = { turnstileSiteKey: string };
+
 export type Roadmap = {
   id: number;
   name: string;
@@ -92,10 +94,15 @@ async function req<T>(url: string, opts: RequestInit = {}): Promise<T> {
 
 export const api = {
   // Auth
-  login: (email: string, password: string) =>
-    req<User>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  login: (email: string, password: string, turnstileToken?: string) =>
+    req<User>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, turnstileToken }),
+    }),
   logout: () => req<{ status: string }>("/api/auth/logout", { method: "POST" }),
   me: () => req<User>("/api/auth/me"),
+  /// Config público (ex.: site key do Turnstile para o widget).
+  publicConfig: () => req<PublicConfig>("/api/config/public"),
   // Atualiza o próprio perfil. password vazio/omitido = mantém a senha atual.
   updateProfile: (input: { name: string; password?: string }) =>
     req<User>("/api/auth/me", { method: "PUT", body: JSON.stringify(input) }),

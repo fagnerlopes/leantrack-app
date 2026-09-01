@@ -87,6 +87,11 @@ Existe para resolver os **roadmaps órfãos**: quando o dono deixa a empresa, ni
 
 ### Login (`/login`)
 - Email + senha.
+- **Verificação anti-bot (Cloudflare Turnstile, modo managed — ADR 019):** antes
+  de autenticar, o formulário exibe o desafio do Turnstile. O token gerado é
+  validado pelo servidor junto ao Cloudflare; desafio não resolvido ou inválido
+  bloqueia o login (mesmo com credenciais corretas). A verificação só atua
+  quando a secret key está configurada no ambiente.
 - Usuários criados via seed (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` no `.env`).
 - Sessão por cookie HttpOnly, válida por 7 dias.
 - **Não há fluxo de "Esqueci minha senha"** (decisão consciente — evita contratar SMTP); a recuperação de acesso é feita pelo admin via reset de senha.
@@ -114,7 +119,7 @@ Existe para resolver os **roadmaps órfãos**: quando o dono deixa a empresa, ni
 
 - **Stack:** Go + React (SPA) + Postgres, container único, porta 80.
 - **Performance:** Gantt renderiza em <500ms com até 200 iniciativas.
-- **Segurança:** rotas autenticadas; CRUD restrito a admins; senhas em bcrypt; cookies HttpOnly + SameSite Lax.
+- **Segurança:** rotas autenticadas; CRUD restrito a admins; senhas em bcrypt; cookies HttpOnly + SameSite Lax; **login protegido por Cloudflare Turnstile** (ADR 019).
 - **Acessibilidade básica:** contraste adequado, formulários com labels.
 - **Idioma:** Português (pt-BR).
 

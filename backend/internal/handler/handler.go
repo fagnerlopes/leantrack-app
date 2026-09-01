@@ -26,12 +26,13 @@ func isUniqueViolation(err error) bool {
 }
 
 type Handler struct {
-	Q   *sqlc.Queries
-	Cfg *config.Config
+	Q               *sqlc.Queries
+	Cfg             *config.Config
+	verifyTurnstile turnstileVerifyFunc
 }
 
 func New(q *sqlc.Queries, cfg *config.Config) *Handler {
-	return &Handler{Q: q, Cfg: cfg}
+	return &Handler{Q: q, Cfg: cfg, verifyTurnstile: defaultTurnstileVerify}
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -82,6 +83,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /up", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+
+	// Config público consumido pelo frontend (ex.: site key do Turnstile).
+	mux.HandleFunc("GET /api/config/public", h.publicConfig)
 
 	// Public auth
 	mux.HandleFunc("POST /api/auth/login", h.login)
@@ -141,13 +145,24 @@ func (h *Handler) Routes() http.Handler {
 	return mux
 }
 
+type PublicConfigDTO struct {
+	TurnstileSiteKey string `json:"turnstileSiteKey"`
+}
+
+func (h *Handler) publicConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, PublicConfigDTO{
+		TurnstileSiteKey: h.Cfg.TurnstileSiteKey,
+	})
+}
+
 // ──────────────────────────────────────────────────────────────
 // Auth
 // ──────────────────────────────────────────────────────────────
 
 type loginReq struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	TurnstileToken string `json:"turnstileToken"`
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +174,10 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	if req.Email == "" || req.Password == "" {
 		writeErr(w, http.StatusBadRequest, "email e senha obrigatórios")
+		return
+	}
+	if err := h.verifyLoginTurnstile(r.Context(), req.TurnstileToken, clientIP(r)); err != nil {
+		writeErr(w, http.StatusForbidden, "verificação de segurança falhou, tente novamente")
 		return
 	}
 	u, err := h.Q.GetUserByEmail(r.Context(), req.Email)

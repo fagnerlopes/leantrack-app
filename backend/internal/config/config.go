@@ -12,6 +12,8 @@ type Config struct {
 	JWTSecret         string
 	SeedAdminEmail    string
 	SeedAdminPassword string
+	TurnstileSiteKey   string
+	TurnstileSecretKey string
 	DevMode           bool
 }
 
@@ -23,6 +25,8 @@ func Load() (*Config, error) {
 		JWTSecret:         os.Getenv("JWT_SECRET"),
 		SeedAdminEmail:    getenv("SEED_ADMIN_EMAIL", "admin@kinghost.com.br"),
 		SeedAdminPassword: getenv("SEED_ADMIN_PASSWORD", "admin123"),
+		TurnstileSiteKey:   os.Getenv("TURNSTILE_SITE_KEY"),
+		TurnstileSecretKey: os.Getenv("TURNSTILE_SECRET_KEY"),
 		DevMode:           os.Getenv("DEV_MODE") != "",
 	}
 	if c.DatabaseURL == "" {

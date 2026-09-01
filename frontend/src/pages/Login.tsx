@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { api } from "../api";
+import Turnstile from "../components/Turnstile";
 
 export default function Login() {
   const { login, user, loading } = useAuth();
@@ -9,8 +11,17 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [siteKey, setSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const nav = useNavigate();
   const loc = useLocation() as any;
+
+  useEffect(() => {
+    api
+      .publicConfig()
+      .then((c) => setSiteKey(c.turnstileSiteKey || null))
+      .catch(() => {});
+  }, []);
 
   if (loading) return null;
   if (user) {
@@ -21,9 +32,13 @@ export default function Login() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErr(null);
+    if (siteKey && !turnstileToken) {
+      setErr("Resolva a verificação de segurança antes de entrar");
+      return;
+    }
     setBusy(true);
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, turnstileToken || undefined);
       const to = loc.state?.from?.pathname || "/";
       nav(to, { replace: true });
     } catch (e: any) {
@@ -47,19 +62,27 @@ export default function Login() {
           <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>Acesso restrito</div>
         </div>
 
-        <label style={lblStyle}>Email</label>
+        <label htmlFor="login-email" style={lblStyle}>Email</label>
         <input
+          id="login-email"
           type="email" autoComplete="username" value={email}
           onChange={e => setEmail(e.target.value)}
           required style={inputStyle}
         />
 
-        <label style={{ ...lblStyle, marginTop: 14 }}>Senha</label>
+        <label htmlFor="login-password" style={{ ...lblStyle, marginTop: 14 }}>Senha</label>
         <input
+          id="login-password"
           type="password" autoComplete="current-password" value={password}
           onChange={e => setPassword(e.target.value)}
           required style={inputStyle}
         />
+
+        {siteKey && (
+          <div style={{ marginTop: 16 }}>
+            <Turnstile siteKey={siteKey} onToken={setTurnstileToken} />
+          </div>
+        )}
 
         {err && <div style={{ marginTop: 12, padding: "8px 12px", background: "#fee2e2", color: "#991b1b", fontSize: 12, borderRadius: 6 }}>{err}</div>}
 

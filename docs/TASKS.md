@@ -292,3 +292,25 @@ alças do retângulo.
 | Testes | Done | 20 casos novos em `roadmap-utils.test.ts` (ida e volta posição↔data, ano bissexto, virada de ano, duração preservada, pontas que não se cruzam, limites da timeline) e 12 em `Gantt.test.tsx` (alças presentes/ausentes conforme permissão e datas, rótulos acessíveis, marcação anti-pan, ajuste por teclado, debounce, selo de leitura). 92/92 Vitest; `tsc -b` limpo; `go test ./...` verde; lint sem erro novo |
 | Verificação visual e funcional (Playwright) | Done | `e2e/screenshot-arrastar-datas.mjs` faz o arrasto **de verdade** com o mouse e confere o resultado no banco pela API: 14 verificações — alças escondidas/visíveis, cada alça mexendo só na sua ponta, corpo preservando a duração, clique ainda abrindo a edição, arrasto **não** abrindo, seta do teclado, rolagem automática na borda e restauração das datas originais (o script é repetível). 7 screenshots revisadas |
 | PRD atualizado | Done | Gesto documentado na visualização do roadmap e na edição de iniciativas |
+
+## Sessão 01/09/2026 — Cloudflare Turnstile no login
+
+ADR: 019 (Cloudflare Turnstile no login)
+
+Motivação: o login é o único endpoint público e estava exposto a força bruta e
+automação de credenciais.
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Config Turnstile (`TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY`) | Done | `config.go`; secret key ausente desativa a verificação (dev/testes) |
+| Endpoint público `GET /api/config/public` | Done | Expõe só a site key ao navegador (nunca segredos) |
+| Verificação `siteverify` no login | Done | `turnstile.go` (`defaultTurnstileVerify` + `verifyLoginTurnstile`); token vazio/ausente com secret configurada → 403 antes de consultar o banco; `remoteip` via `X-Forwarded-For` |
+| Widget Turnstile no `Login.tsx` (modo managed) | Done | `components/Turnstile.tsx` (carrega script `render=explicit`, callbacks de sucesso/expiração/erro, remove widget no unmount); token enviado em `turnstileToken`; submit bloqueado até o desafio resolver quando há site key; sem site key o login segue direto |
+| Testes backend | Done | `turnstile_test.go`: no-op sem secret, token vazio reprova sem chamar o verificador, aprovado/reprovado/falha de infra + integração HTTP `TestLoginWithTurnstile` (sem token 403, aprovado 200, reprovado 403 com senha correta) + `TestPublicConfig`. `go test ./...` verde |
+| Testes frontend | Done | `Login.test.tsx`: widget visível com site key, login direto sem site key, bloqueio até resolver o desafio, token enviado no login. 96/96 Vitest verdes; `tsc -b` limpo; lint sem erro novo (42 problemas pré-existentes) |
+| Verificação visual e funcional (Playwright) | Done | `e2e/screenshot-turnstile.mjs`: widget renderiza e gera token (chaves de teste Cloudflare), `POST /api/auth/login` sem token → 403, com token de teste → 200 e redireciona. Screenshot 1440×900 revisado |
+| Documentação (PRD, ADR 019, TASKS, INFRASTRUCTURE) | Done | Chaves de teste documentadas em INFRASTRUCTURE; `.env` local com as chaves de teste |
+
+> **Nota para o deploy:** definir `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY` reais
+> (do painel Cloudflare) nos ambientes publicados. Enquanto não existirem, o login
+> segue funcionando sem verificação (comportamento proposital — ver ADR 019).

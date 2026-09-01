@@ -6,7 +6,7 @@ import type { User } from "./api";
 type AuthCtx = {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, turnstileToken?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (u: User) => void;
 };
@@ -21,8 +21,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api.me().then(setUser).catch(() => setUser(null)).finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const u = await api.login(email, password);
+  const login = async (email: string, password: string, turnstileToken?: string) => {
+    const u = await api.login(email, password, turnstileToken);
     setUser(u);
   };
 
