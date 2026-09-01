@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
     paths-ignore: [".claude/**"]
+  workflow_dispatch:
 
 permissions:
   contents: read
