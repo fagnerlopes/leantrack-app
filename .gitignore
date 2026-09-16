@@ -15,3 +15,8 @@ backups/
 .agents/skills/
 .hermes/skills/
 skills-lock.json
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.opencode.json
