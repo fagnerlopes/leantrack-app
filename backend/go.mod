@@ -1,4 +1,4 @@
-module github.com/fagnerlopes/roadmap-tribo-cloud/backend
+module leantrack/backend
 
 go 1.23
 

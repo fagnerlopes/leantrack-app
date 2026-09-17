@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/database/sqlc"
+	"leantrack/backend/internal/database/sqlc"
 )
 
 func loginUserID(t *testing.T, q *sqlc.Queries, email string) int64 {

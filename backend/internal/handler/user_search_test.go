@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/auth"
-	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/database/sqlc"
+	"leantrack/backend/internal/auth"
+	"leantrack/backend/internal/database/sqlc"
 )
 
 // seedUser cria/atualiza um usuário com nome distinto do e-mail (loginAs usa

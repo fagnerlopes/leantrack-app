@@ -10,10 +10,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/auth"
-	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/config"
-	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/database"
-	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/database/sqlc"
+	"leantrack/backend/internal/auth"
+	"leantrack/backend/internal/config"
+	"leantrack/backend/internal/database"
+	"leantrack/backend/internal/database/sqlc"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/fagnerlopes/roadmap-tribo-cloud/backend/internal/database/sqlc"
+	"leantrack/backend/internal/database/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
