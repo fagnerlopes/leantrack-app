@@ -36,16 +36,34 @@ func TestMain(m *testing.M) {
 
 // newTestQueries devolve Queries operando numa transação revertida ao fim do
 // teste, isolando totalmente os dados — mesmo padrão dos testes de handler.
+//
+// Diferente daqueles, estes testes afirmam sobre CONTAGENS GLOBAIS (quantos
+// roadmaps existem, quantas iniciativas) e sobre a criação de contas com e-mail
+// fixo. Um banco de desenvolvimento que já tenha sido semeado faria o semeador
+// pular a carga e as asserções passariam por coincidência, escondendo uma
+// regressão. Por isso a transação começa esvaziando as tabelas: o estado inicial
+// passa a ser sempre vazio, e o rollback devolve o banco intacto ao fim.
 func newTestQueries(t *testing.T) *sqlc.Queries {
 	t.Helper()
 	if testPool == nil {
 		t.Skip("DATABASE_URL não definido; pulando teste com banco")
 	}
-	tx, err := testPool.Begin(context.Background())
+	ctx := context.Background()
+	tx, err := testPool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
 	}
 	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+
+	// Ordem obedece às chaves estrangeiras. DELETE, e não TRUNCATE: truncar
+	// pediria ACCESS EXCLUSIVE e travaria os pacotes que rodam em paralelo.
+	for _, table := range []string{
+		"roadmap_collaborators", "roadmap_items", "roadmaps", "sessions", "users",
+	} {
+		if _, err := tx.Exec(ctx, "DELETE FROM "+table); err != nil {
+			t.Fatalf("limpar %s: %v", table, err)
+		}
+	}
 	return sqlc.New(tx)
 }
 

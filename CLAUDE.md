@@ -78,11 +78,24 @@ structs/campos → escrever os handlers. Nunca escreva SQL como string em Go.
 
 Os scripts em `e2e/` apontam para `http://localhost:5173` e autenticam via
 `POST /api/dev/login` (só existe com `DEV_MODE`), então **os dois servidores
-precisam estar rodando**. Cada script cobre uma feature e salva PNGs em `/tmp`:
+precisam estar rodando**. Cada script cobre uma feature e salva PNGs em `/tmp`.
+
+Na primeira vez, instale as dependências do `e2e/` (é um pacote separado, que o
+Dockerfile nunca toca):
+
+```bash
+bash -c 'cd "$(git rev-parse --show-toplevel)/e2e" && mise x -- npm install && mise x -- npx playwright install chromium'
+```
+
+Depois:
 
 ```bash
 bash -c 'cd "$(git rev-parse --show-toplevel)/e2e" && mise x -- node screenshot.mjs'
 ```
+
+O `screenshot.mjs` entra como `admin@example.com` e como `ana.souza@example.com`
+— as identidades que o semeador cria. Um script que use outro e-mail entra numa
+conta sem roadmap algum e fotografa telas vazias.
 
 Ao adicionar uma feature visível, crie um `e2e/screenshot-<feature>.mjs` seguindo
 o padrão dos existentes.
