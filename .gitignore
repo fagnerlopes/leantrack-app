@@ -19,4 +19,9 @@ skills-lock.json
 !.env.example
 !.env.sample
 !.env.template
-.opencode.json
+.opencode/
+
+# Artefatos do processo de design (specs e planos): ficam em disco, fora do
+# repositório. O material do template são o PRD, o TASKS e os ADRs.
+docs/superpowers/
+
