@@ -113,3 +113,12 @@ INSERT INTO users (email, name, role, auth_provider)
 VALUES ($1, $2, 'user', 'local')
 ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
 RETURNING id;
+
+-- ClearMustChangePassword desliga a exigência de troca de senha. Usada apenas
+-- pelo login de desenvolvimento (POST /api/dev/login, registrado só com
+-- DEV_MODE): esse endpoint existe para dispensar o fluxo de autenticação em
+-- testes automatizados, e a tela de troca obrigatória é parte desse fluxo. Sem
+-- isto, entrar como a conta de seed levaria toda captura de tela para
+-- /trocar-senha em vez da aplicação.
+-- name: ClearMustChangePassword :exec
+UPDATE users SET must_change_password = false WHERE id = $1;

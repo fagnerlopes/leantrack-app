@@ -247,6 +247,58 @@ func TestDevLoginDoesNotForcePasswordChange(t *testing.T) {
 	}
 }
 
+// TestDevLoginClearsPendingPasswordChange cobre o caso que de fato acontece nas
+// capturas de tela: a conta JÁ existe e está com troca de senha pendente, porque
+// é assim que a conta de seed nasce. Sem limpar a marca, o dev login devolve uma
+// sessão que o frontend redireciona para /trocar-senha.
+func TestDevLoginClearsPendingPasswordChange(t *testing.T) {
+	srv, q := newTestServer(t)
+	ctx := context.Background()
+
+	// Reproduz a conta de seed: existente e com troca obrigatória pendente.
+	hash, _ := auth.HashPassword("senha-inicial")
+	if _, err := q.EnsureSeedUser(ctx, sqlc.EnsureSeedUserParams{
+		Email: "seed-existente@example.com", PasswordHash: &hash,
+		Name: "Administrador", Role: "admin",
+	}); err != nil {
+		t.Fatalf("criar conta de seed: %v", err)
+	}
+	antes, err := q.GetUserByEmail(ctx, "seed-existente@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	if !antes.MustChangePassword {
+		t.Fatal("pré-condição falhou: a conta de seed deveria nascer com troca pendente")
+	}
+
+	resp, _ := doReq(t, srv, http.MethodPost, "/api/dev/login", nil,
+		map[string]string{"email": "seed-existente@example.com"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/dev/login = %d; esperado 200", resp.StatusCode)
+	}
+	var cookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == auth.CookieName {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("dev login não devolveu cookie de sessão")
+	}
+
+	resp, data := doReq(t, srv, http.MethodGet, "/api/auth/me", cookie, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/auth/me = %d; esperado 200", resp.StatusCode)
+	}
+	var me auth.SessionUser
+	if err := json.Unmarshal(data, &me); err != nil {
+		t.Fatalf("decodificar /api/auth/me: %v", err)
+	}
+	if me.MustChangePassword {
+		t.Error("sessão do dev login ainda exige troca de senha; o frontend iria para /trocar-senha")
+	}
+}
+
 func TestUpdateProfile(t *testing.T) {
 	srv, q := newTestServer(t)
 	cookie := loginAs(t, q, "perfil@test.local", "user")

@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearMustChangePassword = `-- name: ClearMustChangePassword :exec
+UPDATE users SET must_change_password = false WHERE id = $1
+`
+
+// ClearMustChangePassword desliga a exigência de troca de senha. Usada apenas
+// pelo login de desenvolvimento (POST /api/dev/login, registrado só com
+// DEV_MODE): esse endpoint existe para dispensar o fluxo de autenticação em
+// testes automatizados, e a tela de troca obrigatória é parte desse fluxo. Sem
+// isto, entrar como a conta de seed levaria toda captura de tela para
+// /trocar-senha em vez da aplicação.
+func (q *Queries) ClearMustChangePassword(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, clearMustChangePassword, id)
+	return err
+}
+
 const countAdmins = `-- name: CountAdmins :one
 SELECT COUNT(*) FROM users WHERE role = 'admin'
 `

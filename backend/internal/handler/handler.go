@@ -222,6 +222,14 @@ func (h *Handler) devLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// A conta pode existir com troca de senha pendente — é o caso da conta de
+	// seed, que nasce assim. Como este endpoint existe para dispensar o fluxo de
+	// autenticação, ele dispensa também a tela de troca obrigatória: sem isto,
+	// toda captura de tela sairia de /trocar-senha em vez da aplicação.
+	if err := h.Q.ClearMustChangePassword(r.Context(), u.ID); err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro")
+		return
+	}
 	tok, exp, err := auth.CreateSession(r.Context(), h.Q, u.ID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "erro")
