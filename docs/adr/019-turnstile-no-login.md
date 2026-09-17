@@ -69,3 +69,16 @@ Fluxo e configuração:
   distribuídos ignoram limites por IP facilmente. Pode ser somado depois.
 - **Sem proteção:** aceito originalmente por simplicidade, mas o login público
   ficava totalmente exposto.
+## Adendo (2026-09-17) — desligado por padrão no template
+
+Neste repositório, usado como template de workshop, a verificação vem
+**desligada**: os secrets `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` não são
+configurados. O mecanismo já era inteiramente condicional — `verifyLoginTurnstile`
+retorna `nil` quando a secret key está vazia, e o `Login.tsx` só renderiza o
+widget quando `/api/config/public` devolve uma site key —, então nenhuma linha de
+código precisou mudar. Verificado com `kamal secrets print` que, sem os secrets
+definidos, as duas variáveis resolvem para string vazia sem erro de deploy.
+
+O motivo é operacional: um desafio anti-bot no login é precisamente o que impede
+um agente de autenticar-se na aplicação para inspecioná-la ou capturar telas. O
+README documenta como ativar, junto do aviso de que ativar tem esse custo.

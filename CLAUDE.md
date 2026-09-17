@@ -6,20 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The cofounder operating instructions are maintained in @AGENTS.md — read and follow them.
 <!-- cofounder:end -->
 
-## Nomes herdados — não "corrigir"
-
-O diretório e o repositório GitHub se chamam **leantrack-app**, mas nomes antigos
-continuam válidos em três lugares e **não devem ser renomeados**:
-
-| Onde | Nome atual | Por quê não mudar |
-|------|-----------|-------------------|
-| Módulo Go (`backend/go.mod`) | `github.com/fagnerlopes/roadmap-tribo-cloud/backend` | Renomear quebra todos os imports internos |
-| Container Postgres local | `roadmap-tribo-cloud-db` (porta 5432) | Container já existe com os dados de dev |
-| Ambiente Kamal / GHA | `roadmap` (`config/deploy.roadmap.yml`, `.kamal/secrets.roadmap`) | O nome identifica a infra já provisionada na Locaweb Cloud |
-
-Existe também um `roadmap-tribo-cloud-db-local` na porta 5433 (banco secundário
-de experimentos). O banco padrão é o da 5432.
-
 ## Comandos
 
 Todas as ferramentas são invocadas via `mise x` (versões fixadas em `mise.toml`).
@@ -29,8 +15,10 @@ de dentro de `backend/`.
 ### Subir o ambiente local
 
 ```bash
-# 1. Banco (o container já existe; `start` é idempotente)
-podman start roadmap-tribo-cloud-db
+# 1. Banco (o container persiste entre sessões; `start` é idempotente)
+podman start leantrack-app-db 2>/dev/null || \
+  podman run -d --name leantrack-app-db -e POSTGRES_PASSWORD=postgres -p 5432:5432 \
+    docker.io/supabase/postgres:17.6.1.129
 
 # 2. Backend Go (porta 8080) — DEV_MODE habilita POST /api/dev/login
 bash -c 'ROOT="$(git rev-parse --show-toplevel)" && set -a && . "$ROOT/.env" && set +a && cd "$ROOT/backend" && DEV_MODE=1 mise x -- go run ./cmd/server'
@@ -39,23 +27,22 @@ bash -c 'ROOT="$(git rev-parse --show-toplevel)" && set -a && . "$ROOT/.env" && 
 bash -c 'cd "$(git rev-parse --show-toplevel)/frontend" && mise x -- npm run dev'
 ```
 
-`.env` não é versionado. Variáveis lidas por `backend/internal/config/config.go`:
+`.env` não é versionado; `.env.example` é o gabarito. Variáveis lidas por
+`backend/internal/config/config.go`:
 
 - **Obrigatórias:** `DATABASE_URL`, `JWT_SECRET` (o server aborta sem elas)
-- **Com default:** `PORT` (8080), `BASE_URL` (`http://localhost:5173`), `SEED_ADMIN_EMAIL` (`admin@kinghost.com.br`), `SEED_ADMIN_PASSWORD` (`admin123`)
-- **Opcionais:** `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` (sem a secret key a verificação anti-bot é desativada; em dev use as chaves de teste do Cloudflare listadas em `docs/INFRASTRUCTURE.md`), `DEV_MODE`
-
-Para popular o banco local a partir do backup mais recente em `backups/`:
-`bash scripts/seed_dev.sh` (precisa de `DATABASE_URL` no ambiente).
+- **Com default:** `PORT` (8080), `BASE_URL` (`http://localhost:5173`), `SEED_ADMIN_EMAIL` (`admin@example.com`), `SEED_ADMIN_PASSWORD` (`admin123`)
+- **Chaves:** `SEED_DEMO` (carrega os dados de demonstração), `DEV_MODE` (registra o dev login)
+- **Opcionais:** `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` — **desligadas por padrão**; sem a secret key não há verificação anti-bot no login
 
 ### Testes
 
 ```bash
 # Go — unitários + integração
-bash -c 'cd "$(git rev-parse --show-toplevel)/backend" && mise x -- go test ./...'
+bash -c 'ROOT="$(git rev-parse --show-toplevel)" && set -a && . "$ROOT/.env" && set +a && cd "$ROOT/backend" && mise x -- go test ./...'
 
 # Um único teste Go
-bash -c 'cd "$(git rev-parse --show-toplevel)/backend" && mise x -- go test ./internal/handler -run TestLoginWithTurnstile -v'
+bash -c 'ROOT="$(git rev-parse --show-toplevel)" && set -a && . "$ROOT/.env" && set +a && cd "$ROOT/backend" && mise x -- go test ./internal/handler -run TestRoadmapOwnership -v'
 
 # Frontend (Vitest + jsdom)
 bash -c 'cd "$(git rev-parse --show-toplevel)/frontend" && mise x -- npm test'
@@ -69,10 +56,13 @@ bash -c 'cd "$(git rev-parse --show-toplevel)/frontend" && mise x -- npm run lin
 ```
 
 **Os testes de integração Go pulam silenciosamente sem `DATABASE_URL`**
-(`TestMain` em `backend/internal/handler/integration_test.go`). Exporte a variável
-antes de rodar `go test`, senão uma suíte inteira passa sem executar nada. Cada
-teste de integração roda dentro de uma transação revertida no `Cleanup` — os dados
-nunca persistem.
+(`TestMain` em `backend/internal/handler/integration_test.go` e em
+`backend/internal/database/seed/seed_test.go`). Exporte a variável antes de
+rodar `go test`, senão uma suíte inteira passa sem executar nada. Cada teste de
+integração roda dentro de uma transação revertida no `Cleanup` — os dados nunca
+persistem. A exceção é `TestMigrationsCreateNoData`, que cria e destrói um banco
+próprio (`leantrack_migrations_test`), porque precisa exercitar as migrações do
+zero sem atrapalhar os pacotes que rodam em paralelo.
 
 ### sqlc (obrigatório após mexer em SQL)
 
@@ -120,9 +110,8 @@ Detalhes que já causaram bug e devem ser preservados nesse wrapper:
 ### Ciclo de vida do startup (`main.go`)
 
 Retry de conexão ao Postgres (6 tentativas, backoff 1→32s) → `database.RunMigrations`
-→ seed do admin (`UpsertSeedUser`) → `SetInitialAdminPasswords` (define a senha
-inicial dos 3 admins fixos da migração 006, idempotente) → servidor escuta.
-Tudo antes de aceitar tráfego.
+→ `seed.Admin` → `seed.Demo` (só com `SEED_DEMO`) → servidor escuta. Tudo antes
+de aceitar tráfego.
 
 ### Migrations
 
@@ -132,9 +121,33 @@ o embed vive ali, não no `main.go`). O runner registra cada arquivo aplicado em
 `schema_migrations` e aplica os pendentes em ordem alfabética. **Forward-only e
 idempotentes** (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`).
 
+São sete arquivos — 001 a 004 e 006 a 008. A lacuna no 005 é intencional: aquela
+migração existia só para migrar dados do projeto original e foi removida. O runner
+lê a pasta por ordenação, então a lacuna lhe é invisível.
+
+**As migrações contêm apenas esquema.** Nenhuma delas insere linha alguma, e
+nenhuma nova deve inserir: dado de demonstração é responsabilidade do pacote
+`seed`, e dado de pessoa real não entra num repositório que será clonado por
+terceiros. Há um teste que trava isso — `TestMigrationsCreateNoData` exige zero
+linhas em `users`, `roadmaps`, `roadmap_items` e `roadmap_collaborators` depois de
+rodar as migrações num banco virgem.
+
+### Seed (`backend/internal/database/seed/`)
+
+- **`seed.Admin`** garante a conta de administrador e devolve o id dela. Grava
+  senha **apenas na criação**, e a conta nasce com `must_change_password`. Em boots
+  seguintes sincroniza só nome e papel — é isso que impede um deploy de desfazer a
+  troca de senha feita pelo usuário.
+- **`seed.Demo`** carrega dois roadmaps e dez iniciativas, **apenas se a tabela
+  `roadmaps` estiver vazia**. A conta do seed é dona de um e colaboradora com
+  edição no outro, para que as três abas da tela inicial tenham conteúdo.
+- O dev login tem consulta própria (`EnsureDevUser`): a conta criada sob demanda
+  nasce sem senha e **sem** troca obrigatória. Se usasse `EnsureSeedUser`, toda
+  captura de tela do Playwright sairia da tela de troca de senha.
+
 ### Modelo de dados
 
-- `users` — `role` é `admin` ou `viewer`; `must_change_password` força a troca de senha temporária.
+- `users` — `role` é `admin` ou `user`; `must_change_password` força a troca de senha temporária.
 - `sessions` — token opaco em tabela, TTL 7 dias, entregue em cookie `session` HttpOnly.
 - `roadmaps` — dono (`owner_id`), `name` + `slug`, único por `(owner_id, name)`.
 - `roadmap_items` — tabela **flat**: a dependência externa são três colunas
@@ -175,7 +188,7 @@ a regra em `frontend/src/lib/password.ts` — mude os dois juntos.
 Não é React Router framework mode, **não tem Tailwind e não tem shadcn/ui**. É um
 Vite + React 19 clássico (`index.html` + `src/main.tsx`) com `react-router-dom` em
 `BrowserRouter`, e a estilização é feita com **estilos inline** (fidelidade ao
-protótipo original `roadmap-colaborativo.jsx`, mantido na raiz como referência
+protótipo original, mantido em `docs/roadmap-colaborativo.jsx` como referência
 visual). Ícones: `lucide-react` (ADR 013). Não introduza um framework de CSS sem ADR.
 
 - `src/api.ts` — cliente único: todos os tipos e o objeto `api` com os fetches.
@@ -193,28 +206,42 @@ visual). Ícones: `lucide-react` (ADR 013). Não introduza um framework de CSS s
 A janela temporal do Gantt é **derivada das datas cadastradas** (`buildTimeline`),
 não uma grade fixa de trimestres (ADR 014).
 
+`calcRisk` compara `ext_milestone` com a **data de início da iniciativa**, não com
+hoje: milestone depois do início é `critico`; até 14 dias antes é `alerta`; mais de
+14 dias antes é `ok`. Quem for gerar dados de exemplo precisa seguir essa regra —
+"data no passado" não produz risco crítico.
+
 ### Deploy
 
-Push na `main` → `.github/workflows/deploy-roadmap.yml`: provisiona a infra
-(workflow reutilizável `gmautner/locaweb-cloud-provision`, zona ZP02, accessory
-`db`) → faz backup do banco → `kamal setup -d roadmap`. Config em
-`config/deploy.yml` (comum) + `config/deploy.roadmap.yml` (ambiente).
-Produção: <https://roadmaplwsa.kinghost.net>. Health check: `GET /up` → 200.
+Push na `main` → `.github/workflows/deploy.yml`: provisiona a infra (workflow
+reutilizável `gmautner/locaweb-cloud-provision`, zona ZP02, accessory `db`) → faz
+backup do banco → `kamal setup -d leantrack`. Config em `config/deploy.yml`
+(comum) + `config/deploy.leantrack.yml` (ambiente). Health check: `GET /up` → 200.
+
+**Não há domínio fixo:** cada VM se publica em `https://<INFRA_WEB_IP>.nip.io`,
+com `BASE_URL` derivado do mesmo IP. É isso que permite a qualquer pessoa clonar
+o repositório e publicar na própria infraestrutura sem configurar DNS.
 
 ## Documentação do projeto
 
-`docs/PRD.md` (o quê), `docs/TASKS.md` (progresso), `docs/adr/NNN-*.md` (o porquê
-de cada decisão técnica — 19 ADRs, leia o relevante antes de mudar comportamento),
-`docs/INFRASTRUCTURE.md` (serviços), `docs/superpowers/{specs,plans}` (designs de
-features maiores).
+`README.md` (como rodar e publicar — é o contrato do template), `docs/PRD.md`
+(o quê), `docs/TASKS.md` (progresso), `docs/adr/NNN-*.md` (o porquê de cada
+decisão técnica — leia o relevante antes de mudar comportamento),
+`docs/INFRASTRUCTURE.md` (serviços).
+
+`docs/superpowers/` **não é versionado** (specs e planos de design são artefatos
+de processo, não material do repositório).
 
 ## Regras do projeto
 
 - **Backup antes de publicar (automático):** o workflow de deploy
-  (`.github/workflows/deploy-roadmap.yml`, passo *"Backup database before deploy"*)
+  (`.github/workflows/deploy.yml`, passo *"Backup database before deploy"*)
   faz `pg_dump` do banco de produção ANTES de aplicar a nova versão. O dump é
   salvo em `/data/backups` na VM do banco (disco com snapshot diário) e anexado
   como artefato do run (`db-backup-<timestamp>`, retenção 90 dias). Se o backup
   falhar num ambiente que já tem banco, o deploy é abortado. Ver ADR 012.
   - Ao alterar o pipeline de deploy, **preserve esse passo** — é a trava que
     garante um ponto de restauração antes de cada publicação.
+- **Nada de dado pessoal no repositório.** Este projeto é clonado por terceiros:
+  e-mails, nomes e domínios reais não entram em migrações, *fixtures* de teste,
+  scripts de captura ou documentação. Use `example.com`.

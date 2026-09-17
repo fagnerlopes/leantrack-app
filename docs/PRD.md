@@ -1,4 +1,4 @@
-# PRD — Roadmap da Squad Cloud
+# PRD — LeanTrack
 
 ## Visão geral
 
@@ -6,7 +6,7 @@ Aplicação web interna que apresenta roadmaps de iniciativas em formato Gantt, 
 
 A aplicação está evoluindo de **um único roadmap compartilhado** para **vários roadmaps, cada um com um dono** — permitindo que diferentes setores da empresa usem a ferramenta. Esta evolução é faseada (ver `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md`):
 
-- **Fase 1 (concluída):** fundação de dados — tabela `roadmaps`, vínculo `roadmap_items.roadmap_id`, e migração dos dados atuais para o roadmap institucional **"Roadmap Squad Cloud 2026"** (dono: Eduarda Moraes). Sem mudança visível na aplicação.
+- **Fase 1 (concluída):** fundação de dados — tabela `roadmaps`, vínculo `roadmap_items.roadmap_id`, e migração dos dados atuais para o roadmap institucional **"Roadmap Plataforma 2026"** (dono: Ana Souza). Sem mudança visível na aplicação.
 - **Fase 2 (concluída):** backend — endpoints por roadmap (`/api/roadmaps*`) e itens escopados (`/api/roadmaps/{id}/items*`), autorização por propriedade (`RequireRoadmapOwner`), gestão de contas por admin (`/api/admin/users*`), autenticação desacoplada (interface `Authenticator` — preparação SSO), `roadmap_id` agora obrigatório. As rotas legadas `/api/items*` seguem ativas em compatibilidade até a Fase 3 (ver ADR 009); o frontend ainda não mudou.
 - **Fase 3 (concluída):** frontend — telas "Meus roadmaps" / "Todos os roadmaps", roteamento por id (`/roadmaps/{id}-{slug}`), modo leitura para não-donos (selo "Somente leitura"), criação/renomeação/exclusão de roadmaps (exclusão confirmada por slug), e painel "Usuários" só para admins. O frontend passou a consumir exclusivamente as rotas escopadas por roadmap; as rotas legadas `/api/items*` foram removidas (ver ADR 009).
 
@@ -41,7 +41,7 @@ Tudo é protegido por autenticação; nada é público.
 - **Dono:** modo edição completo — criar/editar iniciativas, arrastar para reordenar, cores, datas, link do épico, além de **renomear** e **excluir** o roadmap (exclusão confirmada digitando o slug exato).
 - **Colaborador com permissão de editar:** abre o roadmap em **modo edição** (sem o selo "Somente leitura"), podendo mexer no conteúdo e renomear; **não vê o botão de excluir** (exclusão é só do dono).
 - **Não-dono sem permissão de editar:** modo **somente leitura**, com selo "🔒 Somente leitura — roadmap de {dono}" e sem controles de edição.
-- **Botão "Compartilhar":** visível ao **dono**, a quem tem permissão de compartilhar e ao **admin** (em qualquer roadmap — ADR 016). Abre o **diálogo de colaboradores**: convidar por **e-mail** (de conta existente) definindo as permissões "Pode editar" e "Pode compartilhar"; **aviso** quando o e-mail não tem conta, orientando solicitar o cadastro a `marcus.januario@locaweb.com.br` (sem auto-cadastro); e a **lista de pessoas com acesso** (o dono aparece marcado como "Dono", sem opção de remover) com botão para **remover** colaboradores.
+- **Botão "Compartilhar":** visível ao **dono**, a quem tem permissão de compartilhar e ao **admin** (em qualquer roadmap — ADR 016). Abre o **diálogo de colaboradores**: convidar por **e-mail** (de conta existente) definindo as permissões "Pode editar" e "Pode compartilhar"; **aviso** quando o e-mail não tem conta, orientando solicitar o cadastro a `um administrador` (sem auto-cadastro); e a **lista de pessoas com acesso** (o dono aparece marcado como "Dono", sem opção de remover) com botão para **remover** colaboradores.
   - **Autocomplete do convite:** ao digitar **4 ou mais caracteres** no campo de e-mail, o sistema sugere usuários cujo **e-mail ou nome** casam com o texto, exibindo nome + e-mail. Quem já tem acesso (o dono e colaboradores atuais) **não aparece** nas sugestões. Escolher uma sugestão preenche o campo automaticamente.
 - Gantt horizontal com cabeçalho por trimestre e por mês; o período é derivado das datas
   cadastradas (ADR 014), não é uma janela fixa.

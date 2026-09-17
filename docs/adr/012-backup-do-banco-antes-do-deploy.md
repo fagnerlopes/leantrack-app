@@ -4,7 +4,7 @@
 
 ## Context
 
-O ambiente `roadmap` faz deploy automático a cada push na branch `main` — não há
+O ambiente publicado faz deploy automático a cada push na branch `main` — não há
 um passo manual entre "salvar" e "publicar". Foi definido como requisito que
 nenhuma publicação que afete produção ocorra sem um backup do banco feito antes,
 para que sempre exista um ponto de restauração recente caso um deploy introduza

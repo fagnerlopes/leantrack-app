@@ -3,7 +3,7 @@
 **Status:** Accepted
 
 ## Context
-O app é de uso interno da Squad Cloud / diretoria. Precisa-se de algo seguro o bastante para conteúdo confidencial, mas que seja simples para começar.
+O app é de de uso interno de uma equipe e da sua diretoria. Precisa-se de algo seguro o bastante para conteúdo confidencial, mas que seja simples para começar.
 
 ## Decision
 Email + senha com **bcrypt**, sessão em tabela `sessions` referenciada por cookie HttpOnly+SameSite Lax, TTL 7 dias. Usuário admin criado em runtime via `UpsertSeedUser` lendo `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` do `.env` a cada start (idempotente).

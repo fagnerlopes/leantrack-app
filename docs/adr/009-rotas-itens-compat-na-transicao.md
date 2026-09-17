@@ -24,8 +24,8 @@ fases, inviabilizando inclusive o gate de verificação visual da Fase 2.
 ## Decision
 
 Manter as rotas legadas `/api/items*` funcionando durante a Fase 2, **apontando
-para o roadmap institucional** ("Roadmap Squad Cloud 2026", slug
-`roadmap-squad-cloud-2026`), em paralelo com as novas rotas escopadas:
+para o roadmap institucional** ("Roadmap Plataforma 2026", slug
+`roadmap-plataforma-2026`), em paralelo com as novas rotas escopadas:
 
 - `GET /api/items` → lista os itens do roadmap institucional.
 - `POST/PUT/DELETE /api/items*` → criam/editam/removem itens do roadmap

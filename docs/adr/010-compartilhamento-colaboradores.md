@@ -5,7 +5,7 @@
 ## Context
 O modelo do ADR 007 (autorização por propriedade) só permite que o dono edite o
 roadmap. Surgiu a necessidade de o dono permitir que outras pessoas editem o
-roadmap dele (ex.: Eduarda compartilha com Marcus).
+roadmap dele (ex.: Ana compartilha com Bruno).
 
 ## Decision
 Introduzir a tabela `roadmap_collaborators (roadmap_id, user_id, can_edit,

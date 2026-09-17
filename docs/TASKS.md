@@ -3,7 +3,7 @@
 | Task | Status | Notas |
 |------|--------|-------|
 | Configurar repositório, mise.toml, .env, .gitignore | Done | JWT_SECRET gerado, admin seed configurado |
-| Container Postgres (supabase/postgres) via podman | Done | `roadmap-tribo-cloud-db` na porta 5432 |
+| Container Postgres (supabase/postgres) via podman | Done | `leantrack-app-db` na porta 5432 |
 | Migrations (users, sessions, roadmap_items) | Done | `001_init.sql`, embedded e idempotente |
 | sqlc queries: users + items | Done | `internal/database/sqlc/` gerado |
 | Auth: bcrypt + sessões em DB + cookie HttpOnly | Done | TTL 7 dias |
@@ -21,7 +21,7 @@
 | Dockerfile multi-stage | Done | Pronto para Locaweb Cloud |
 | Documentação (PRD, TASKS, ADRs, INFRASTRUCTURE) | Done | — |
 | Commit + push | Done | — |
-| Deploy preview Locaweb Cloud | Done | Ambiente `roadmap` (zona ZP02) no ar; deploy automático a cada push na `main`. URL: https://187.45.201.251.nip.io (`/up` → 200). Fases 1, 2 e 3 publicadas com sucesso. |
+| Deploy preview Locaweb Cloud | Done | Ambiente `leantrack` (zona ZP02); deploy automático a cada push na `main`. A URL é o `<IP-da-VM>.nip.io` do ambiente publicado (`/up` → 200). |
 
 ## Sessão 27/05/2026 — novas features no roadmap
 
@@ -54,7 +54,7 @@ Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · Plan
 | Helper `Slugify` (função pura, TDD) | Done | `internal/slugutil/`; dep `golang.org/x/text` direta |
 | Migração 004 — tabela `roadmaps` + coluna `roadmap_id` (nullable) | Done | DDL aditivo/idempotente; índices `roadmaps_owner_idx`, `roadmap_items_roadmap_idx` |
 | Queries sqlc de roadmaps (uso na Fase 2) | Done | `queries/roadmaps.sql` → List/ListMy/GetByID/Create/Update/Delete |
-| Migração 005 — backfill (DML idempotente) | Done | Garante Eduarda, cria "Roadmap Squad Cloud 2026", move itens; verificado: 0 órfãos |
+| Migração 005 — backfill (DML idempotente) | Done | Garante Ana, cria "Roadmap Plataforma 2026", move itens; verificado: 0 órfãos |
 | Script de seed dev/preview a partir do backup | Done | `scripts/seed_dev.sh`; psql do PATH ou container `<repo>-db`. Testado: 17 itens do backup → vinculados |
 | Suíte completa do backend | Done | `go test ./...` e `go vet ./...` verdes |
 | ADR 007 (autorização por propriedade) + 008 (auth desacoplada p/ SSO) | Done | Numerados 007/008 (004 e 006 já existiam); spec os chama de 004/005 |
@@ -105,7 +105,7 @@ Spec: `docs/superpowers/specs/2026-06-08-roadmaps-por-usuario-design.md` · ADRs
 > escopadas por roadmap; as rotas de compatibilidade `/api/items*` deixaram de
 > existir.
 
-| Senha inicial para admins fixos (acesso ao ambiente publicado) | Done | `SetInitialAdminPasswords` no startup preenche `password_hash` dos admins sem senha local (fagner/marcus/eduarda) com o segredo `SEED_ADMIN_PASSWORD`; idempotente; teste de integração `TestSetInitialAdminPasswords`. Ver nota no ADR 008 |
+| Senha inicial para admins fixos (acesso ao ambiente publicado) | Done | `SetInitialAdminPasswords` no startup preenche `password_hash` dos admins sem senha local (os admins fixos) com o segredo `SEED_ADMIN_PASSWORD`; idempotente; teste de integração `TestSetInitialAdminPasswords`. Ver nota no ADR 008 |
 | Cache-Control correto para SPA (evita app antigo após deploy) | Done | `index.html` servido com `no-cache` (sempre revalida); assets hasheados em `/assets/*` com `public, max-age=31536000, immutable`. Sintoma corrigido: navegador servia o frontend da Fase 2 em cache, que chamava `/api/items` (removido) → HTTP 404 |
 
 ## Sessão 09/06/2026 — Perfil do usuário (menu + troca de senha)
@@ -139,7 +139,7 @@ Spec: `docs/superpowers/specs/2026-06-10-compartilhamento-de-roadmaps-design.md`
 |------|--------|-------|
 | Migração — tabela `roadmap_collaborators` | Done | Aditiva e idempotente; PK composta `(roadmap_id, user_id)`, flags `can_edit`/`can_share`, `created_at`/`created_by`, índice por `user_id`; não cria linha para o dono |
 | Middlewares de autorização (editor/sharer) | Done | `RequireRoadmapEditor` (dono OU `can_edit`) libera itens + renomear; `RequireRoadmapSharer` (dono OU `can_share`) libera gestão de colaboradores; `RequireRoadmapOwner` mantido só para excluir o roadmap |
-| Endpoints de colaboradores | Done | GET/POST `/api/roadmaps/{id}/collaborators`, PUT/DELETE `/api/roadmaps/{id}/collaborators/{userId}`; convite por e-mail de conta existente (404 amigável se não houver conta → solicitar a marcus.januario@locaweb.com.br); upsert de permissões; remoção nunca atinge o dono |
+| Endpoints de colaboradores | Done | GET/POST `/api/roadmaps/{id}/collaborators`, PUT/DELETE `/api/roadmaps/{id}/collaborators/{userId}`; convite por e-mail de conta existente (404 amigável se não houver conta → solicitar a um administrador); upsert de permissões; remoção nunca atinge o dono |
 | Listagem "Compartilhados comigo" | Done | GET `/api/roadmaps/shared` (autenticado) — roadmaps em que o usuário é colaborador, sem os próprios |
 | Flags do DTO de roadmap | Done | `canEdit` (semântica ampliada: dono ou `can_edit`), `canShare`, `canDelete` (só dono), `isOwner` — em listagens e no `GET /api/roadmaps/{id}` |
 | Aba "Compartilhados comigo" (`RoadmapList`) | Done | Terceira aba ao lado de "Meus roadmaps"/"Todos os roadmaps"; selo "COMPARTILHADO" no cartão |
@@ -159,7 +159,7 @@ ADR: 011 (busca de usuários para autocomplete do compartilhamento)
 | Testes Go + Vitest | Done | Go `TestSearchUsersForRoadmap`: 403 sem `can_share`, vazio com <4 chars, casa e-mail/nome, exclui dono e colaboradores. Vitest: não busca com <4 chars, sugere a partir de 4 e preenche ao escolher. `go test` verde; `tsc -b` ok; 32+ testes Vitest verdes |
 | Verificação visual (Playwright) | Done | 3 screenshots revisadas: badge "Hoje" dinâmico, legenda no rodapé com 0 iniciativas, dropdown de autocomplete |
 | Regra de backup antes de publicar (CLAUDE.md) | Done | Adicionada a regra: sempre fazer backup do banco de produção antes de qualquer deploy |
-| Deploy das melhorias (ambiente `roadmap`) | Done | Publicado em https://187.45.201.251.nip.io; `GET /up` 200. Backup manual pré-deploy validado (`/data/backups/predeploy-20260612-153710.dump`, 12 tabelas) |
+| Deploy das melhorias | Done | Publicado no `<IP-da-VM>.nip.io` do ambiente; `GET /up` 200. Backup manual pré-deploy validado (`/data/backups/predeploy-20260612-153710.dump`, 12 tabelas) |
 | Backup automático no pipeline de deploy | Done | Passo "Backup database before deploy" em `deploy-roadmap.yml`: `pg_dump -Fc` antes do `kamal setup`, salvo em `/data/backups` + artefato `db-backup-<ts>` (90 dias); pulado no 1º deploy, bloqueante se falhar com banco existente. ADR 012; CLAUDE.md atualizado |
 
 ## Sessão 12/06/2026 (tarde) — Ícones lucide-react e menu de ações do roadmap
@@ -314,3 +314,21 @@ automação de credenciais.
 > **Nota para o deploy:** definir `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY` reais
 > (do painel Cloudflare) nos ambientes publicados. Enquanto não existirem, o login
 > segue funcionando sem verificação (comportamento proposital — ver ADR 019).
+
+## Sessão 17/09/2026 — repositório preparado como template de workshop
+
+| Task | Status | Notas |
+|------|--------|-------|
+| Módulo Go renomeado para caminho neutro | Done | `leantrack/backend`; container local `leantrack-app-db` |
+| `.env.example` criado | Done | Não existia; sem ele um clone não subia (`DATABASE_URL` e `JWT_SECRET` são obrigatórios) |
+| Migrações contendo apenas esquema | Done | 005 removida (backfill do projeto original); 006 perdeu os INSERT de pessoas. Travado por `TestMigrationsCreateNoData` |
+| `EnsureSeedUser` não sobrescreve senha | Done | `UpsertSeedUser` regravava `password_hash` em todo boot, desfazendo a troca de senha no deploy seguinte. `SetInitialAdminPasswords` removida |
+| Conta inicial com troca de senha obrigatória | Done | Marcada apenas na criação |
+| Dev login com consulta própria (`EnsureDevUser`) | Done | Sem senha e sem troca obrigatória, senão toda captura de tela cairia em `/trocar-senha`. Coberto por `TestDevLoginDoesNotForcePasswordChange` |
+| Semeador de demonstração idempotente | Done | `seed.Demo`: 2 roadmaps, 10 iniciativas, 4 status, 3 estados de risco, cor, épico e dependência interna; só carrega em banco sem roadmaps |
+| Identidades reais removidas do código e dos testes | Done | Marca, mensagem de erro voltada ao usuário, fixtures e scripts Playwright |
+| Deploy parametrizado por participante | Done | Ambiente `leantrack`, sem domínio fixo: cada VM publica no próprio `<IP>.nip.io` |
+| Turnstile mantido, desligado por padrão | Done | Verificado com `kamal secrets print` que os secrets ausentes resolvem para string vazia sem erro. Adendo no ADR 019 |
+| `README.md` na raiz | Done | Não existia; é o contrato do template |
+| Documentação despersonalizada | Done | PRD, TASKS, ADRs 001/002/008/009/010/012/019 |
+| `docs/superpowers/` fora do versionamento | Done | Specs e planos são artefatos de processo |

@@ -34,7 +34,7 @@ Isolar o mecanismo de identidade atrás de uma interface, e preparar o modelo de
   - Novas colunas `auth_provider TEXT NOT NULL DEFAULT 'local'` e `external_id TEXT` (NULL hoje).
   - `UNIQUE (auth_provider, external_id)` quando `external_id` não for NULL.
 
-Na **Fase 1**, a usuária institucional (Eduarda) é criada com `password_hash = ''` (vazio) — satisfaz o `NOT NULL` atual mas **não permite login** (bcrypt nunca valida hash vazio). A senha real é definida na Fase 2 (gestão de contas) ou via seed de dev.
+Na **Fase 1**, a usuária institucional (Ana) é criada com `password_hash = ''` (vazio) — satisfaz o `NOT NULL` atual mas **não permite login** (bcrypt nunca valida hash vazio). A senha real é definida na Fase 2 (gestão de contas) ou via seed de dev.
 
 ## Rationale
 - Trocar o provedor de identidade não deve afetar handlers nem a autorização por propriedade.
