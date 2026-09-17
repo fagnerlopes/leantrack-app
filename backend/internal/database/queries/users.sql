@@ -8,22 +8,29 @@ SELECT id, email, password_hash, name, role, created_at
 FROM users
 WHERE id = $1;
 
--- name: UpsertSeedUser :exec
-INSERT INTO users (email, password_hash, name, role)
-VALUES ($1, $2, $3, $4)
+-- EnsureSeedUser garante a existência da conta de administrador inicial.
+-- Não é um upsert completo de propósito: `password_hash` e
+-- `must_change_password` são definidos APENAS na criação. Sobrescrevê-los em
+-- todo boot desfaria a troca de senha feita pelo usuário e o devolveria à tela
+-- de troca obrigatória depois de cada deploy.
+-- name: EnsureSeedUser :one
+INSERT INTO users (email, password_hash, name, role, must_change_password)
+VALUES ($1, $2, $3, $4, true)
 ON CONFLICT (email) DO UPDATE
-SET password_hash = EXCLUDED.password_hash,
-    name = EXCLUDED.name,
-    role = EXCLUDED.role;
+SET name = EXCLUDED.name,
+    role = EXCLUDED.role
+RETURNING id;
 
--- SetInitialAdminPasswords define uma senha inicial para admins que ainda não
--- têm senha local utilizável (NULL ou string vazia — ex.: os admins fixos das
--- migrações 005/006, prontos para SSO). Idempotente: nunca sobrescreve um hash
--- bcrypt já definido.
--- name: SetInitialAdminPasswords :exec
-UPDATE users
-SET password_hash = $1
-WHERE role = 'admin' AND (password_hash IS NULL OR password_hash = '');
+-- EnsureDevUser cria, sob demanda, a conta usada pelo login de desenvolvimento
+-- (POST /api/dev/login, registrado apenas com DEV_MODE). Nasce sem senha e SEM
+-- troca obrigatória: o endpoint existe justamente para dispensar o fluxo de
+-- autenticação em testes automatizados, e exigir troca de senha aqui levaria
+-- toda captura de tela para a tela de troca de senha.
+-- name: EnsureDevUser :one
+INSERT INTO users (email, name, role, auth_provider)
+VALUES ($1, 'Dev', 'admin', 'local')
+ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+RETURNING id;
 
 -- name: ListUsers :many
 SELECT id, email, name, role, auth_provider, created_at

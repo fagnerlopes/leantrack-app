@@ -11,11 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"leantrack/backend/internal/auth"
 	"leantrack/backend/internal/config"
 	"leantrack/backend/internal/database"
+	"leantrack/backend/internal/database/seed"
 	"leantrack/backend/internal/database/sqlc"
 	"leantrack/backend/internal/handler"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -56,31 +57,12 @@ func main() {
 
 	q := sqlc.New(pool)
 
-	// Seed admin user
-	hash, err := auth.HashPassword(cfg.SeedAdminPassword)
+	adminID, err := seed.Admin(ctx, q, cfg.SeedAdminEmail, cfg.SeedAdminPassword)
 	if err != nil {
-		slog.Error("hash seed", "err", err)
-		os.Exit(1)
-	}
-	if err := q.UpsertSeedUser(ctx, sqlc.UpsertSeedUserParams{
-		Email:        cfg.SeedAdminEmail,
-		PasswordHash: &hash,
-		Name:         "Administrador",
-		Role:         "admin",
-	}); err != nil {
 		slog.Error("seed admin", "err", err)
 		os.Exit(1)
 	}
-	slog.Info("admin seeded", "email", cfg.SeedAdminEmail)
-
-	// Define a senha inicial dos admins fixos (migração 006) que ainda não têm
-	// senha local, reaproveitando o mesmo segredo. Idempotente — não sobrescreve
-	// senhas já definidas. Permite que fagner/marcus/eduarda entrem por e-mail+senha
-	// enquanto o SSO (ADR 008) não está ativo.
-	if err := q.SetInitialAdminPasswords(ctx, &hash); err != nil {
-		slog.Error("seed admin passwords", "err", err)
-		os.Exit(1)
-	}
+	slog.Info("admin seeded", "email", cfg.SeedAdminEmail, "id", adminID)
 
 	h := handler.New(q, cfg)
 	apiMux := h.Routes() // *http.ServeMux with /up, /api/*, /auth/*

@@ -91,10 +91,10 @@ func TestLoginWithTurnstile(t *testing.T) {
 	ctx := context.Background()
 
 	hash, _ := auth.HashPassword("Senha123!")
-	if err := q.UpsertSeedUser(ctx, sqlc.UpsertSeedUserParams{
+	if _, err := q.EnsureSeedUser(ctx, sqlc.EnsureSeedUserParams{
 		Email: "turnstile@test.local", PasswordHash: &hash, Name: "Turn", Role: "user",
 	}); err != nil {
-		t.Fatalf("upsert user: %v", err)
+		t.Fatalf("ensure user: %v", err)
 	}
 
 	body := func(token string) *bytes.Buffer {

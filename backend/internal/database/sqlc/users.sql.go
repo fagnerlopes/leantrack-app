@@ -109,6 +109,58 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const ensureDevUser = `-- name: EnsureDevUser :one
+INSERT INTO users (email, name, role, auth_provider)
+VALUES ($1, 'Dev', 'admin', 'local')
+ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+RETURNING id
+`
+
+// EnsureDevUser cria, sob demanda, a conta usada pelo login de desenvolvimento
+// (POST /api/dev/login, registrado apenas com DEV_MODE). Nasce sem senha e SEM
+// troca obrigatória: o endpoint existe justamente para dispensar o fluxo de
+// autenticação em testes automatizados, e exigir troca de senha aqui levaria
+// toda captura de tela para a tela de troca de senha.
+func (q *Queries) EnsureDevUser(ctx context.Context, email string) (int64, error) {
+	row := q.db.QueryRow(ctx, ensureDevUser, email)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const ensureSeedUser = `-- name: EnsureSeedUser :one
+INSERT INTO users (email, password_hash, name, role, must_change_password)
+VALUES ($1, $2, $3, $4, true)
+ON CONFLICT (email) DO UPDATE
+SET name = EXCLUDED.name,
+    role = EXCLUDED.role
+RETURNING id
+`
+
+type EnsureSeedUserParams struct {
+	Email        string  `json:"email"`
+	PasswordHash *string `json:"password_hash"`
+	Name         string  `json:"name"`
+	Role         string  `json:"role"`
+}
+
+// EnsureSeedUser garante a existência da conta de administrador inicial.
+// Não é um upsert completo de propósito: `password_hash` e
+// `must_change_password` são definidos APENAS na criação. Sobrescrevê-los em
+// todo boot desfaria a troca de senha feita pelo usuário e o devolveria à tela
+// de troca obrigatória depois de cada deploy.
+func (q *Queries) EnsureSeedUser(ctx context.Context, arg EnsureSeedUserParams) (int64, error) {
+	row := q.db.QueryRow(ctx, ensureSeedUser,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Name,
+		arg.Role,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getSession = `-- name: GetSession :one
 SELECT s.token, s.user_id, s.expires_at, u.email, u.name, u.role, u.must_change_password
 FROM sessions s
@@ -307,21 +359,6 @@ func (q *Queries) SearchUsersForRoadmap(ctx context.Context, arg SearchUsersForR
 	return items, nil
 }
 
-const setInitialAdminPasswords = `-- name: SetInitialAdminPasswords :exec
-UPDATE users
-SET password_hash = $1
-WHERE role = 'admin' AND (password_hash IS NULL OR password_hash = '')
-`
-
-// SetInitialAdminPasswords define uma senha inicial para admins que ainda não
-// têm senha local utilizável (NULL ou string vazia — ex.: os admins fixos das
-// migrações 005/006, prontos para SSO). Idempotente: nunca sobrescreve um hash
-// bcrypt já definido.
-func (q *Queries) SetInitialAdminPasswords(ctx context.Context, passwordHash *string) error {
-	_, err := q.db.Exec(ctx, setInitialAdminPasswords, passwordHash)
-	return err
-}
-
 const updateOwnName = `-- name: UpdateOwnName :one
 UPDATE users SET name = $2 WHERE id = $1
 RETURNING id, email, name, role, auth_provider, created_at
@@ -404,30 +441,4 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const upsertSeedUser = `-- name: UpsertSeedUser :exec
-INSERT INTO users (email, password_hash, name, role)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (email) DO UPDATE
-SET password_hash = EXCLUDED.password_hash,
-    name = EXCLUDED.name,
-    role = EXCLUDED.role
-`
-
-type UpsertSeedUserParams struct {
-	Email        string  `json:"email"`
-	PasswordHash *string `json:"password_hash"`
-	Name         string  `json:"name"`
-	Role         string  `json:"role"`
-}
-
-func (q *Queries) UpsertSeedUser(ctx context.Context, arg UpsertSeedUserParams) error {
-	_, err := q.db.Exec(ctx, upsertSeedUser,
-		arg.Email,
-		arg.PasswordHash,
-		arg.Name,
-		arg.Role,
-	)
-	return err
 }

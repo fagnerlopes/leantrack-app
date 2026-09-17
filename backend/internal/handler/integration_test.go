@@ -64,16 +64,13 @@ func loginAs(t *testing.T, q *sqlc.Queries, email, role string) *http.Cookie {
 	t.Helper()
 	ctx := context.Background()
 	hash, _ := auth.HashPassword("senha-teste")
-	if err := q.UpsertSeedUser(ctx, sqlc.UpsertSeedUserParams{
+	id, err := q.EnsureSeedUser(ctx, sqlc.EnsureSeedUserParams{
 		Email: email, PasswordHash: &hash, Name: email, Role: role,
-	}); err != nil {
-		t.Fatalf("upsert user: %v", err)
-	}
-	u, err := q.GetUserByEmail(ctx, email)
+	})
 	if err != nil {
-		t.Fatalf("get user: %v", err)
+		t.Fatalf("ensure user: %v", err)
 	}
-	tok, _, err := auth.CreateSession(ctx, q, u.ID)
+	tok, _, err := auth.CreateSession(ctx, q, id)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -210,51 +207,42 @@ func TestAdminUsersGate(t *testing.T) {
 	}
 }
 
-func TestSetInitialAdminPasswords(t *testing.T) {
-	if testPool == nil {
-		t.Skip("DATABASE_URL não definido; pulando teste de integração")
-	}
-	ctx := context.Background()
-	tx, err := testPool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("begin tx: %v", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := sqlc.New(tx)
+// TestDevLoginDoesNotForcePasswordChange protege o uso a que o endpoint serve:
+// entrar sem passar pelo fluxo de autenticação, em testes automatizados e em
+// capturas de tela. Se a conta criada sob demanda exigisse troca de senha, o
+// frontend redirecionaria para /trocar-senha e toda captura sairia da tela
+// errada.
+func TestDevLoginDoesNotForcePasswordChange(t *testing.T) {
+	srv, _ := newTestServer(t)
 
-	// Dois admins sem senha local utilizável: um com NULL (migração 006) e outro
-	// com string vazia (migração 005). Ambos devem receber a senha inicial.
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO users (email, password_hash, name, role) VALUES
-		   ($1, NULL, $2, 'admin'),
-		   ($3, '',   $4, 'admin')`,
-		"sso-null@test.local", "SSO Null", "sso-empty@test.local", "SSO Empty"); err != nil {
-		t.Fatalf("insert admins sem senha: %v", err)
+	resp, _ := doReq(t, srv, http.MethodPost, "/api/dev/login", nil,
+		map[string]string{"email": "novo-dev@example.com"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/dev/login = %d; esperado 200", resp.StatusCode)
 	}
-
-	hash, _ := auth.HashPassword("senha-inicial")
-	if err := q.SetInitialAdminPasswords(ctx, &hash); err != nil {
-		t.Fatalf("set initial passwords: %v", err)
-	}
-
-	for _, email := range []string{"sso-null@test.local", "sso-empty@test.local"} {
-		u, err := q.GetUserByEmail(ctx, email)
-		if err != nil {
-			t.Fatalf("get user %s: %v", email, err)
-		}
-		if u.PasswordHash == nil || !auth.CheckPassword(*u.PasswordHash, "senha-inicial") {
-			t.Fatalf("senha inicial não aplicada para %s", email)
+	var cookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == auth.CookieName {
+			cookie = c
 		}
 	}
-
-	// Idempotência: rodar de novo não sobrescreve a senha já definida.
-	hash2, _ := auth.HashPassword("outra-senha")
-	if err := q.SetInitialAdminPasswords(ctx, &hash2); err != nil {
-		t.Fatalf("set initial passwords (2): %v", err)
+	if cookie == nil {
+		t.Fatal("dev login não devolveu cookie de sessão")
 	}
-	u2, _ := q.GetUserByEmail(ctx, "sso-null@test.local")
-	if !auth.CheckPassword(*u2.PasswordHash, "senha-inicial") {
-		t.Fatal("senha não deveria mudar numa segunda execução (idempotência)")
+
+	resp, data := doReq(t, srv, http.MethodGet, "/api/auth/me", cookie, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/auth/me = %d; esperado 200", resp.StatusCode)
+	}
+	var me auth.SessionUser
+	if err := json.Unmarshal(data, &me); err != nil {
+		t.Fatalf("decodificar /api/auth/me: %v", err)
+	}
+	if me.MustChangePassword {
+		t.Error("conta criada pelo dev login exige troca de senha; capturas de tela quebrariam")
+	}
+	if me.Role != "admin" {
+		t.Errorf("role = %q; esperado \"admin\"", me.Role)
 	}
 }
 

@@ -16,7 +16,7 @@ import (
 func seedUser(t *testing.T, q *sqlc.Queries, email, name string) {
 	t.Helper()
 	hash, _ := auth.HashPassword("senha-teste")
-	if err := q.UpsertSeedUser(context.Background(), sqlc.UpsertSeedUserParams{
+	if _, err := q.EnsureSeedUser(context.Background(), sqlc.EnsureSeedUserParams{
 		Email: email, PasswordHash: &hash, Name: name, Role: "user",
 	}); err != nil {
 		t.Fatalf("seed user %s: %v", email, err)

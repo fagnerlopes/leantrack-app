@@ -209,11 +209,12 @@ func (h *Handler) devLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := h.Q.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
-		// create on the fly
-		hash, _ := auth.HashPassword("dev")
-		_ = h.Q.UpsertSeedUser(r.Context(), sqlc.UpsertSeedUserParams{
-			Email: req.Email, PasswordHash: &hash, Name: "Dev", Role: "admin",
-		})
+		// Cria a conta sob demanda, sem senha e sem troca obrigatória: este
+		// endpoint existe para dispensar o fluxo de autenticação em testes.
+		if _, err := h.Q.EnsureDevUser(r.Context(), req.Email); err != nil {
+			writeErr(w, http.StatusInternalServerError, "erro")
+			return
+		}
 		u, err = h.Q.GetUserByEmail(r.Context(), req.Email)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "erro")
