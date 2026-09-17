@@ -6,28 +6,30 @@ import (
 )
 
 type Config struct {
-	Port              string
-	DatabaseURL       string
-	BaseURL           string
-	JWTSecret         string
-	SeedAdminEmail    string
-	SeedAdminPassword string
+	Port               string
+	DatabaseURL        string
+	BaseURL            string
+	JWTSecret          string
+	SeedAdminEmail     string
+	SeedAdminPassword  string
 	TurnstileSiteKey   string
 	TurnstileSecretKey string
-	DevMode           bool
+	DevMode            bool
+	SeedDemo           bool
 }
 
 func Load() (*Config, error) {
 	c := &Config{
-		Port:              getenv("PORT", "8080"),
-		DatabaseURL:       os.Getenv("DATABASE_URL"),
-		BaseURL:           getenv("BASE_URL", "http://localhost:5173"),
-		JWTSecret:         os.Getenv("JWT_SECRET"),
-		SeedAdminEmail:    getenv("SEED_ADMIN_EMAIL", "admin@kinghost.com.br"),
-		SeedAdminPassword: getenv("SEED_ADMIN_PASSWORD", "admin123"),
+		Port:               getenv("PORT", "8080"),
+		DatabaseURL:        os.Getenv("DATABASE_URL"),
+		BaseURL:            getenv("BASE_URL", "http://localhost:5173"),
+		JWTSecret:          os.Getenv("JWT_SECRET"),
+		SeedAdminEmail:     getenv("SEED_ADMIN_EMAIL", "admin@kinghost.com.br"),
+		SeedAdminPassword:  getenv("SEED_ADMIN_PASSWORD", "admin123"),
 		TurnstileSiteKey:   os.Getenv("TURNSTILE_SITE_KEY"),
 		TurnstileSecretKey: os.Getenv("TURNSTILE_SECRET_KEY"),
-		DevMode:           os.Getenv("DEV_MODE") != "",
+		DevMode:            os.Getenv("DEV_MODE") != "",
+		SeedDemo:           os.Getenv("SEED_DEMO") != "",
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")

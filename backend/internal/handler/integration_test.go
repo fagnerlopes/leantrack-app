@@ -14,6 +14,7 @@ import (
 	"leantrack/backend/internal/config"
 	"leantrack/backend/internal/database"
 	"leantrack/backend/internal/database/sqlc"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

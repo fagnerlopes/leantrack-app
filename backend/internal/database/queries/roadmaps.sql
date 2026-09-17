@@ -75,3 +75,8 @@ JOIN roadmaps r ON r.id = c.roadmap_id
 JOIN users u    ON u.id = r.owner_id
 WHERE c.user_id = $1
 ORDER BY r.name ASC;
+
+-- CountRoadmaps é a guarda de idempotência do semeador de demonstração:
+-- banco com qualquer roadmap já criado não recebe carga.
+-- name: CountRoadmaps :one
+SELECT COUNT(*) FROM roadmaps;

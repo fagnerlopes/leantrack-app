@@ -14,6 +14,7 @@ import (
 	"leantrack/backend/internal/config"
 	"leantrack/backend/internal/database/sqlc"
 	"leantrack/backend/internal/slugutil"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"

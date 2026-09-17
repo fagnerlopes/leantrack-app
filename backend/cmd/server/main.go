@@ -64,6 +64,14 @@ func main() {
 	}
 	slog.Info("admin seeded", "email", cfg.SeedAdminEmail, "id", adminID)
 
+	if cfg.SeedDemo {
+		// Falha na carga de demonstração não impede o app de servir: registra e
+		// segue. Derrubar o servidor por causa de dado de exemplo seria pior.
+		if err := seed.Demo(ctx, q, adminID); err != nil {
+			slog.Error("demo seed", "err", err)
+		}
+	}
+
 	h := handler.New(q, cfg)
 	apiMux := h.Routes() // *http.ServeMux with /up, /api/*, /auth/*
 

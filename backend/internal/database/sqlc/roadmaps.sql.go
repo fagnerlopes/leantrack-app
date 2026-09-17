@@ -70,6 +70,19 @@ func (q *Queries) AdminListRoadmaps(ctx context.Context) ([]AdminListRoadmapsRow
 	return items, nil
 }
 
+const countRoadmaps = `-- name: CountRoadmaps :one
+SELECT COUNT(*) FROM roadmaps
+`
+
+// CountRoadmaps é a guarda de idempotência do semeador de demonstração:
+// banco com qualquer roadmap já criado não recebe carga.
+func (q *Queries) CountRoadmaps(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countRoadmaps)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countRoadmapsByOwnerAndName = `-- name: CountRoadmapsByOwnerAndName :one
 SELECT COUNT(*) FROM roadmaps WHERE owner_id = $1 AND name = $2
 `

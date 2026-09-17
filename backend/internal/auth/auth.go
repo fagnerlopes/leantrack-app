@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"leantrack/backend/internal/database/sqlc"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
@@ -20,8 +21,8 @@ import (
 var ErrNoSession = errors.New("no session")
 
 const (
-	CookieName     = "session"
-	SessionTTL     = 7 * 24 * time.Hour
+	CookieName = "session"
+	SessionTTL = 7 * 24 * time.Hour
 )
 
 type ctxKey int

@@ -109,6 +109,30 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const ensureDemoUser = `-- name: EnsureDemoUser :one
+INSERT INTO users (email, name, role, auth_provider)
+VALUES ($1, $2, 'user', 'local')
+ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+RETURNING id
+`
+
+type EnsureDemoUserParams struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+// EnsureDemoUser cria um usuário fictício do conjunto de demonstração.
+// Nasce SEM senha (password_hash nulo), portanto não é porta de entrada na
+// URL pública da VM: existe para ser dono e colaborador de roadmaps. Em
+// desenvolvimento ainda se entra como ele pelo dev login.
+// CreateUser não serve aqui porque fixa must_change_password = true no SQL.
+func (q *Queries) EnsureDemoUser(ctx context.Context, arg EnsureDemoUserParams) (int64, error) {
+	row := q.db.QueryRow(ctx, ensureDemoUser, arg.Email, arg.Name)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const ensureDevUser = `-- name: EnsureDevUser :one
 INSERT INTO users (email, name, role, auth_provider)
 VALUES ($1, 'Dev', 'admin', 'local')

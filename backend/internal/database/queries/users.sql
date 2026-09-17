@@ -102,3 +102,14 @@ DELETE FROM sessions WHERE token = $1;
 
 -- name: DeleteExpiredSessions :exec
 DELETE FROM sessions WHERE expires_at <= now();
+
+-- EnsureDemoUser cria um usuário fictício do conjunto de demonstração.
+-- Nasce SEM senha (password_hash nulo), portanto não é porta de entrada na
+-- URL pública da VM: existe para ser dono e colaborador de roadmaps. Em
+-- desenvolvimento ainda se entra como ele pelo dev login.
+-- CreateUser não serve aqui porque fixa must_change_password = true no SQL.
+-- name: EnsureDemoUser :one
+INSERT INTO users (email, name, role, auth_provider)
+VALUES ($1, $2, 'user', 'local')
+ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+RETURNING id;
