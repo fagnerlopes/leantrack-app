@@ -1,0 +1,43 @@
+servers:
+  web:
+    hosts:
+      - <%= ENV['INFRA_WEB_IP'] %>
+
+env:
+  clear:
+    APP_ENV: leantrack
+    # Derivado do IP da VM: cada participante se publica sozinho, sem
+    # configurar DNS. O certificado Let's Encrypt sai pelo desafio HTTP-01.
+    BASE_URL: https://<%= ENV['INFRA_WEB_IP'] %>.nip.io
+    SEED_ADMIN_EMAIL: admin@example.com
+    # Carrega o conjunto de demonstração no primeiro boot (banco vazio).
+    SEED_DEMO: "1"
+  secret:
+    - DATABASE_URL
+    - JWT_SECRET
+    - SEED_ADMIN_PASSWORD
+    # Opcionais: sem os dois secrets no repositório, o GitHub Actions os
+    # resolve como string vazia e o login não apresenta desafio anti-bot.
+    # Ver "Ativar a verificação anti-bot" no README.
+    - TURNSTILE_SITE_KEY
+    - TURNSTILE_SECRET_KEY
+
+# Sem domínio próprio: cada VM atende no seu <IP>.nip.io e recebe o próprio
+# certificado Let's Encrypt (desafio HTTP-01). Para usar um domínio seu, some-o
+# a esta lista e aponte o DNS para o IP da VM antes de publicar.
+proxy:
+  hosts:
+    - <%= ENV['INFRA_WEB_IP'] %>.nip.io
+  ssl: true
+
+accessories:
+  db:
+    image: supabase/postgres:17.6.1.129
+    host: <%= ENV['INFRA_DB_IP'] %>
+    port: "5432:5432"
+    cmd: "postgres -D /etc/postgresql -c shared_buffers=1GB -c effective_cache_size=3GB -c work_mem=10MB -c maintenance_work_mem=256MB -c max_connections=100"
+    env:
+      secret:
+        - POSTGRES_PASSWORD
+    directories:
+      - /data/pgdata:/var/lib/postgresql/data

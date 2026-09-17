@@ -13,7 +13,7 @@ jobs:
   infra:
     uses: gmautner/locaweb-cloud-provision/.github/workflows/provision.yml@v1
     with:
-      env_name: "roadmap"
+      env_name: "leantrack"
       zone: "ZP02"
       accessories: '[{"name":"db","plan":"medium","disk_size_gb":20}]'
     secrets:
@@ -96,9 +96,9 @@ jobs:
         env:
           KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          kamal proxy boot -d roadmap || kamal proxy reboot -y -d roadmap || true
-          kamal setup -d roadmap
-          kamal accessory reboot all -d roadmap
+          kamal proxy boot -d leantrack || kamal proxy reboot -y -d leantrack || true
+          kamal setup -d leantrack
+          kamal accessory reboot all -d leantrack
 
       - uses: actions/delete-package-versions@v5
         with:
