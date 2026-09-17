@@ -21,7 +21,7 @@ await p.screenshot({ path: "/tmp/01-login-turnstile.png", fullPage: true });
 // Fluxo completo: sem token → 403; com token de teste → login ok e redireciona.
 if (widgetReady) {
   const resp = await ctx.request.post(`${VITE}/api/auth/login`, {
-    data: { email: "admin@kinghost.com.br", password: "admin123", turnstileToken: "" },
+    data: { email: "admin@example.com", password: "admin123", turnstileToken: "" },
   });
   console.log("login sem token (esperado 403):", resp.status());
 }

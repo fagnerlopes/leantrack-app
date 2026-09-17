@@ -8,7 +8,7 @@ async function devLogin(email) {
   const resp = await ctx.request.post(`${VITE}/api/dev/login`, { data: { email, password: "" } });
   console.log(`dev login ${email}:`, resp.status());
 }
-await devLogin("admin@kinghost.com.br");
+await devLogin("admin@example.com");
 
 // Cria um roadmap próprio (owner => canEdit/canShare/canDelete) com itens que
 // exercitam todos os ícones: risco crítico/alerta, dependência, link de épico.

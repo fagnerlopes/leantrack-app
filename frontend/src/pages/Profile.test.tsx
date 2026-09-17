@@ -8,7 +8,7 @@ vi.mock("../api", () => ({ api: { updateProfile: (i: any) => updateProfile(i) } 
 const updateUser = vi.fn();
 vi.mock("../auth", () => ({
   useAuth: () => ({
-    user: { id: 1, name: "Fagner Lopes", email: "fagner@x.com", role: "user" },
+    user: { id: 1, name: "Administrador", email: "admin@x.com", role: "user" },
     updateUser,
     logout: vi.fn(),
   }),
@@ -22,12 +22,12 @@ const confirmInput = () => screen.getByPlaceholderText("Repita a nova senha") as
 const save = () => fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
 describe("Profile", () => {
-  beforeEach(() => { updateProfile.mockReset(); updateProfile.mockResolvedValue({ id: 1, name: "Fagner Lopes", email: "fagner@x.com", role: "user" }); updateUser.mockReset(); });
+  beforeEach(() => { updateProfile.mockReset(); updateProfile.mockResolvedValue({ id: 1, name: "Administrador", email: "admin@x.com", role: "user" }); updateUser.mockReset(); });
 
   it("salva só o nome quando a senha fica em branco (password = undefined)", async () => {
     renderPage();
     save();
-    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ name: "Fagner Lopes", password: undefined }));
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ name: "Administrador", password: undefined }));
     await waitFor(() => expect(updateUser).toHaveBeenCalled());
   });
 
@@ -36,7 +36,7 @@ describe("Profile", () => {
     fireEvent.change(pwdInput(), { target: { value: "NovaSenha123!" } });
     fireEvent.change(confirmInput(), { target: { value: "NovaSenha123!" } });
     save();
-    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ name: "Fagner Lopes", password: "NovaSenha123!" }));
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ name: "Administrador", password: "NovaSenha123!" }));
   });
 
   it("bloqueia senha que não atende à política", async () => {

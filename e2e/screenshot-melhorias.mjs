@@ -9,7 +9,7 @@ async function devLogin(ctx, email) {
 }
 
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
-await devLogin(ctx, "eduarda.moraes@kinghost.com.br");
+await devLogin(ctx, "ana.souza@example.com");
 const p = await ctx.newPage();
 
 // 1. Roadmap existente — verifica o badge "Hoje" com a data atual (jun/2026).

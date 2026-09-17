@@ -5,7 +5,7 @@ const VITE = "http://localhost:5173";
 const OUT = process.env.OUT || "/tmp";
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1280, height: 420 } });
-await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@kinghost.com.br", password: "" } });
+await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@example.com", password: "" } });
 const p = await ctx.newPage();
 for (const [rota, nome] of [["/", "lista"], ["/admin/users", "usuarios"]]) {
   await p.goto(`${VITE}${rota}`);

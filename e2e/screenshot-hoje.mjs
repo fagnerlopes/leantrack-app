@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const VITE = "http://localhost:5173";
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
-await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "eduarda.moraes@kinghost.com.br", password: "" } });
+await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "ana.souza@example.com", password: "" } });
 const p = await ctx.newPage();
 
 await p.goto(`${VITE}/roadmaps/1-roadmap-squad-cloud-2026`);

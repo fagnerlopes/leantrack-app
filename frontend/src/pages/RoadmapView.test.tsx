@@ -14,13 +14,13 @@ vi.mock("../api", () => ({
     deleteRoadmap: (id: number, slug: string) => deleteRoadmap(id, slug),
   },
 }));
-vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, name: "Fagner", role: "user" }, logout: vi.fn() }) }));
+vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, name: "Ana", role: "user" }, logout: vi.fn() }) }));
 
 import RoadmapView from "./RoadmapView";
 
 const base: Roadmap = {
-  id: 5, name: "Roadmap Squad Cloud 2026", slug: "roadmap-squad-cloud-2026",
-  description: "", ownerId: 9, ownerName: "Eduarda Moraes", itemCount: 3,
+  id: 5, name: "Roadmap Plataforma", slug: "roadmap-squad-cloud-2026",
+  description: "", ownerId: 9, ownerName: "Ana Souza", itemCount: 3,
   canEdit: false, canShare: false, canDelete: false, isOwner: false,
 };
 

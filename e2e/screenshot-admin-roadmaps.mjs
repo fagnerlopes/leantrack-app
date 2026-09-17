@@ -6,7 +6,7 @@ const b = await chromium.launch();
 
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
 const resp = await ctx.request.post(`${VITE}/api/dev/login`, {
-  data: { email: "fagner.lopes@kinghost.com.br", password: "" },
+  data: { email: "admin@example.com", password: "" },
 });
 console.log("dev login admin:", resp.status());
 const p = await ctx.newPage();

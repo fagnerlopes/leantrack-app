@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const VITE = "http://localhost:5173";
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 } });
-await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@kinghost.com.br", password: "" } });
+await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@example.com", password: "" } });
 const p = await ctx.newPage();
 
 await p.goto(`${VITE}/roadmaps/101-teste-timeline-dinamica`);

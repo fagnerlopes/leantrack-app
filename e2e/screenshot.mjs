@@ -19,13 +19,13 @@ async function devLogin(ctx, email) {
   await ctx.close();
 }
 
-// ── 2. Admin (fagner) — não é dono de nenhum roadmap ───────────
+// ── 2. Admin — não é dono de nenhum roadmap ───────────
 {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
-  await devLogin(ctx, "fagner.lopes@kinghost.com.br");
+  await devLogin(ctx, "admin@example.com");
   const p = await ctx.newPage();
 
-  // "Meus roadmaps" (provavelmente vazio para o fagner)
+  // "Meus roadmaps" (provavelmente vazio para o admin)
   await p.goto(`${VITE}/`);
   await p.waitForLoadState("networkidle");
   await p.waitForTimeout(600);
@@ -36,7 +36,7 @@ async function devLogin(ctx, email) {
   await p.waitForTimeout(600);
   await p.screenshot({ path: "/tmp/03-todos-roadmaps.png", fullPage: true });
 
-  // Abrir o roadmap institucional → modo leitura (fagner não é dono)
+  // Abrir o roadmap institucional → modo leitura (admin não é dono)
   const card = p.locator("a[href^='/roadmaps/']").first();
   if (await card.count()) {
     await card.click();
@@ -54,10 +54,10 @@ async function devLogin(ctx, email) {
   await ctx.close();
 }
 
-// ── 3. Dona (eduarda) — modo edição completo ───────────────────
+// ── 3. Dona (Ana) — modo edição completo ───────────────────
 {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
-  await devLogin(ctx, "eduarda.moraes@kinghost.com.br");
+  await devLogin(ctx, "ana.souza@example.com");
   const p = await ctx.newPage();
 
   await p.goto(`${VITE}/`);

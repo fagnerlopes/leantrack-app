@@ -9,8 +9,8 @@ async function devLogin(ctx, email) {
 }
 
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
-// Eduarda é dona do roadmap local → vê "Compartilhar" e "Excluir".
-await devLogin(ctx, "eduarda.moraes@kinghost.com.br");
+// Bruno é dona do roadmap local → vê "Compartilhar" e "Excluir".
+await devLogin(ctx, "ana.souza@example.com");
 const p = await ctx.newPage();
 
 // 1. Lista de roadmaps — três abas (Meus / Compartilhados comigo / Todos)

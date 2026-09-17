@@ -9,7 +9,7 @@ const URL = `${VITE}/roadmaps/2-roadmap-squad-cloud-2026`;
 
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } });
-await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@kinghost.com.br", password: "" } });
+await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@example.com", password: "" } });
 const p = await ctx.newPage();
 await p.goto(URL);
 await p.waitForLoadState("networkidle");

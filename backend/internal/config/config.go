@@ -24,7 +24,7 @@ func Load() (*Config, error) {
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		BaseURL:            getenv("BASE_URL", "http://localhost:5173"),
 		JWTSecret:          os.Getenv("JWT_SECRET"),
-		SeedAdminEmail:     getenv("SEED_ADMIN_EMAIL", "admin@kinghost.com.br"),
+		SeedAdminEmail:     getenv("SEED_ADMIN_EMAIL", "admin@example.com"),
 		SeedAdminPassword:  getenv("SEED_ADMIN_PASSWORD", "admin123"),
 		TurnstileSiteKey:   os.Getenv("TURNSTILE_SITE_KEY"),
 		TurnstileSecretKey: os.Getenv("TURNSTILE_SECRET_KEY"),

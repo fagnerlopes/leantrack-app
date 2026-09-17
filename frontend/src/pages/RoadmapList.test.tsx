@@ -10,15 +10,15 @@ vi.mock("../api", () => ({ api: {
   listRoadmaps: (mine: boolean) => listRoadmaps(mine),
   listSharedRoadmaps: () => listSharedRoadmaps(),
 } }));
-vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, name: "Fagner", role: "user" }, logout: vi.fn() }) }));
+vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, name: "Ana", role: "user" }, logout: vi.fn() }) }));
 
 import RoadmapList from "./RoadmapList";
 
 const sample: Roadmap[] = [
-  { id: 3, name: "Roadmap VPS 2026", slug: "roadmap-vps-2026", description: "", ownerId: 1, ownerName: "Fagner", itemCount: 4, canEdit: true, canShare: true, canDelete: true, isOwner: true },
+  { id: 3, name: "Roadmap VPS 2026", slug: "roadmap-vps-2026", description: "", ownerId: 1, ownerName: "Ana", itemCount: 4, canEdit: true, canShare: true, canDelete: true, isOwner: true },
 ];
 const shared: Roadmap[] = [
-  { id: 9, name: "Roadmap da Eduarda", slug: "roadmap-da-eduarda", description: "", ownerId: 2, ownerName: "Eduarda", itemCount: 7, canEdit: true, canShare: false, canDelete: false, isOwner: false },
+  { id: 9, name: "Roadmap do Bruno", slug: "roadmap-do-bruno", description: "", ownerId: 2, ownerName: "Bruno", itemCount: 7, canEdit: true, canShare: false, canDelete: false, isOwner: false },
 ];
 
 function renderList() {
@@ -49,6 +49,6 @@ describe("RoadmapList", () => {
     await waitFor(() => expect(listRoadmaps).toHaveBeenCalledWith(true));
     await userEvent.click(screen.getByText("Compartilhados comigo"));
     await waitFor(() => expect(listSharedRoadmaps).toHaveBeenCalled());
-    expect(screen.getByText("Roadmap da Eduarda")).toBeInTheDocument();
+    expect(screen.getByText("Roadmap do Bruno")).toBeInTheDocument();
   });
 });

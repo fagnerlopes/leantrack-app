@@ -41,7 +41,6 @@ export default function RoadmapList() {
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
       <AppHeader
         title="Roadmaps"
-        subtitle="Squad Cloud · Locaweb"
         actions={isAdmin && (
           <>
             <Link to="/admin/roadmaps" style={btnLight}>Administrar roadmaps</Link>

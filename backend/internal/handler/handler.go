@@ -1064,7 +1064,7 @@ func (h *Handler) addCollaborator(w http.ResponseWriter, r *http.Request) {
 	}
 	target, err := h.Q.GetUserByEmail(r.Context(), email)
 	if errors.Is(err, pgx.ErrNoRows) {
-		writeErr(w, http.StatusNotFound, "Não há conta com esse e-mail. Solicite o cadastro a marcus.januario@locaweb.com.br.")
+		writeErr(w, http.StatusNotFound, "Não há conta com esse e-mail. Solicite o cadastro a um administrador.")
 		return
 	}
 	if err != nil {

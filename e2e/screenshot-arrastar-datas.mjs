@@ -10,7 +10,7 @@ const OUT = process.env.OUT || "/tmp";
 
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
-await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@kinghost.com.br", password: "" } });
+await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@example.com", password: "" } });
 const p = await ctx.newPage();
 
 const items = async () => (await (await ctx.request.get(`${VITE}/api/roadmaps/${ROADMAP}/items`)).json());

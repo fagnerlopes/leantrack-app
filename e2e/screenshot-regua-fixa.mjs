@@ -10,7 +10,7 @@ const b = await chromium.launch();
 
 async function run(label, width, height) {
   const ctx = await b.newContext({ viewport: { width, height } });
-  await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@kinghost.com.br", password: "" } });
+  await ctx.request.post(`${VITE}/api/dev/login`, { data: { email: "admin@example.com", password: "" } });
   const p = await ctx.newPage();
   await p.goto(URL);
   await p.waitForLoadState("networkidle");

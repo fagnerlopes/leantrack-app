@@ -18,7 +18,7 @@ vi.mock("../api", () => ({ api: {
 import ShareDialog from "./ShareDialog";
 
 const existing: Collaborator[] = [
-  { userId: 2, name: "Marcus Januário", email: "marcus.januario@locaweb.com.br", canEdit: true, canShare: false },
+  { userId: 2, name: "Bruno Lima", email: "bruno.lima@example.com", canEdit: true, canShare: false },
 ];
 
 describe("ShareDialog", () => {
@@ -32,7 +32,7 @@ describe("ShareDialog", () => {
   it("lista os colaboradores atuais", async () => {
     render(<ShareDialog roadmapId={9} onClose={() => {}} />);
     await waitFor(() => expect(listCollaborators).toHaveBeenCalledWith(9));
-    expect(screen.getByText("Marcus Januário")).toBeInTheDocument();
+    expect(screen.getByText("Bruno Lima")).toBeInTheDocument();
   });
 
   it("convida por e-mail com a permissão escolhida", async () => {
@@ -45,12 +45,12 @@ describe("ShareDialog", () => {
   });
 
   it("mostra o aviso quando o e-mail não tem conta", async () => {
-    addCollaborator.mockRejectedValue(new Error("Não há conta com esse e-mail. Solicite o cadastro a marcus.januario@locaweb.com.br."));
+    addCollaborator.mockRejectedValue(new Error("Não há conta com esse e-mail. Solicite o cadastro a um administrador."));
     render(<ShareDialog roadmapId={9} onClose={() => {}} />);
     await waitFor(() => expect(listCollaborators).toHaveBeenCalled());
     await userEvent.type(screen.getByLabelText("e-mail do convidado"), "ninguem@x.com");
     await userEvent.click(screen.getByRole("button", { name: /convidar/i }));
-    await waitFor(() => expect(screen.getByText(/Solicite o cadastro a marcus\.januario@locaweb\.com\.br/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Solicite o cadastro a um administrador/i)).toBeInTheDocument());
   });
 
   it("não dispara a busca com menos de 4 caracteres", async () => {
@@ -85,8 +85,8 @@ describe("ShareDialog", () => {
 
   it("remove um colaborador", async () => {
     render(<ShareDialog roadmapId={9} onClose={() => {}} />);
-    await waitFor(() => expect(screen.getByText("Marcus Januário")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: /remover Marcus/i }));
+    await waitFor(() => expect(screen.getByText("Bruno Lima")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /remover Bruno/i }));
     await waitFor(() => expect(removeCollaborator).toHaveBeenCalledWith(9, 2));
   });
 });

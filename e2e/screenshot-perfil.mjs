@@ -9,7 +9,7 @@ async function devLogin(ctx, email) {
 }
 
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
-await devLogin(ctx, "fagner.lopes@kinghost.com.br");
+await devLogin(ctx, "admin@example.com");
 const p = await ctx.newPage();
 
 // 1. Lista de roadmaps com o menu do usuário aberto (avatar de iniciais)

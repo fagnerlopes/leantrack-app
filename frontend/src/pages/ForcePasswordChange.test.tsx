@@ -9,7 +9,7 @@ const updateUser = vi.fn();
 const logout = vi.fn();
 vi.mock("../auth", () => ({
   useAuth: () => ({
-    user: { id: 1, name: "Eduarda", email: "e@x.com", role: "user", mustChangePassword: true },
+    user: { id: 1, name: "Bruno", email: "e@x.com", role: "user", mustChangePassword: true },
     loading: false,
     updateUser,
     logout,
@@ -24,7 +24,7 @@ const confirm = () => screen.getByPlaceholderText("Repita a nova senha") as HTML
 const submit = () => fireEvent.click(screen.getByRole("button", { name: "Salvar e entrar" }));
 
 describe("ForcePasswordChange", () => {
-  beforeEach(() => { changePassword.mockReset(); changePassword.mockResolvedValue({ id: 1, name: "Eduarda", email: "e@x.com", role: "user", mustChangePassword: false }); updateUser.mockReset(); });
+  beforeEach(() => { changePassword.mockReset(); changePassword.mockResolvedValue({ id: 1, name: "Bruno", email: "e@x.com", role: "user", mustChangePassword: false }); updateUser.mockReset(); });
 
   it("exibe o alerta para salvar a senha no Keeper", () => {
     renderPage();

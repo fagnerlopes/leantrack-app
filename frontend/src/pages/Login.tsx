@@ -58,7 +58,7 @@ export default function Login() {
         boxShadow: "0 24px 60px rgba(0,0,0,0.3)",
       }}>
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Roadmap Squad Cloud</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>LeanTrack</h1>
           <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>Acesso restrito</div>
         </div>
 

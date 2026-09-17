@@ -10,7 +10,7 @@ async function devLogin(ctx, email) {
 
 // ── Contexto do admin ───────────────────────────────────────────
 const admin = await b.newContext({ viewport: { width: 1440, height: 900 } });
-await devLogin(admin, "fagner.lopes@kinghost.com.br");
+await devLogin(admin, "admin@example.com");
 
 // Cria um usuário-alvo (já nasce com troca obrigatória).
 const tempEmail = `alvo-reset@test.local`;
