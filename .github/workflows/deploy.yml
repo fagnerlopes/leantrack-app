@@ -10,7 +10,28 @@ permissions:
   packages: write
 
 jobs:
+  # Guarda: sem as credenciais da Locaweb Cloud não há o que publicar. Os jobs
+  # seguintes são PULADOS em vez de falharem no provisionamento — quem acabou de
+  # clonar o repositório e ainda não configurou os secrets recebe um "skipped"
+  # legível em vez de um erro críptico. Secrets não podem ser lidos direto num
+  # `if:` de job, por isso a verificação vira a saída deste job.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        run: |
+          if [ -n "${{ secrets.CLOUDSTACK_API_KEY }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Secrets da Locaweb Cloud não configurados — deploy pulado. Ver 'Publicar na sua VM' no README."
+          fi
+
   infra:
+    needs: check
+    if: needs.check.outputs.configured == 'true'
     uses: gmautner/locaweb-cloud-provision/.github/workflows/provision.yml@v1
     with:
       env_name: "leantrack"
@@ -22,7 +43,8 @@ jobs:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
   deploy:
-    needs: infra
+    needs: [check, infra]
+    if: needs.check.outputs.configured == 'true'
     runs-on: ubuntu-latest
     env:
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}

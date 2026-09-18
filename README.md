@@ -138,6 +138,10 @@ Antes do primeiro push, configure estes segredos no **seu** repositório
 | `JWT_SECRET` | Assina os cookies de sessão | Você gera |
 | `SEED_ADMIN_PASSWORD` | Senha do primeiro acesso do administrador | Você gera |
 
+Enquanto `CLOUDSTACK_API_KEY` não estiver configurado, os jobs de
+provisionamento e de publicação são **pulados** — o workflow não falha e nada é
+criado. Você pode empurrar código à vontade antes de decidir publicar.
+
 **A URL da aplicação é `https://<IP-da-VM>.nip.io`**, derivada automaticamente
 do IP que a VM recebeu — não é preciso configurar DNS, e o certificado
 Let's Encrypt é emitido sozinho. O IP aparece no log do workflow. Para usar um
